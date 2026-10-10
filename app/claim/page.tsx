@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { saveOrder, type MintOrder, type OrderStatus } from "@/lib/orders";
+import { getOrder, saveOrderAsync, type MintOrder, type OrderStatus } from "@/lib/orders";
 import {
   FieldLabel,
   FormMessage,
@@ -70,6 +70,7 @@ export default function ClaimPage(): React.JSX.Element {
   const [paymentMsg, setPaymentMsg] = useState<Flash>(EMPTY_FLASH);
   const [toast, setToast] = useState<string>("");
   const [now, setNow] = useState<number>(0);
+  const [busy, setBusy] = useState<boolean>(false);
   const toastTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -124,14 +125,25 @@ export default function ClaimPage(): React.JSX.Element {
     [showToast]
   );
 
-  const persist = useCallback((o: MintOrder): void => {
-    setOrder(o);
-    try {
-      saveOrder(o);
-    } catch {
-      /* local store unavailable — order still works for this session */
-    }
-  }, []);
+  const persist = useCallback(
+    async (o: MintOrder): Promise<boolean> => {
+      setBusy(true);
+      try {
+        await saveOrderAsync(o);
+        setOrder(o);
+        return true;
+      } catch {
+        setMessage({
+          text: "Could not reach the database. Check your connection and try again.",
+          tone: "error",
+        });
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    []
+  );
 
   const scrollToId = (id: string): void => {
     requestAnimationFrame(() => {
@@ -149,18 +161,40 @@ export default function ClaimPage(): React.JSX.Element {
       });
       return;
     }
-    if (recovery.trim() !== "" && !/^[A-Za-z0-9_-]{32,128}$/.test(recovery.trim())) {
+    const rec: string = recovery.trim();
+    if (rec !== "" && !/^[A-Za-z0-9_-]{32,128}$/.test(rec)) {
       setMessage({ text: "That recovery code doesn't look valid.", tone: "error" });
       return;
     }
-    if (recovery.trim() !== "" && order !== null && recovery.trim() === order.token) {
-      setMessage({ text: "Order restored — see payment details below.", tone: "success" });
-      scrollToId("#qm-payment");
+    if (rec !== "") {
+      // Returning order? Look it up in the database first.
+      setBusy(true);
+      getOrder(rec)
+        .then((found: MintOrder | null) => {
+          if (found !== null) {
+            setOrder(found);
+            setTxid(found.txid);
+            setPaymentMsg(EMPTY_FLASH);
+            setMessage({ text: "Order restored — see payment details below.", tone: "success" });
+            scrollToId("#qm-payment");
+          } else {
+            setMessage({ text: "No order found for that recovery code.", tone: "error" });
+          }
+        })
+        .catch(() => {
+          setMessage({
+            text: "Could not reach the database. Check your connection and try again.",
+            tone: "error",
+          });
+        })
+        .finally(() => {
+          setBusy(false);
+        });
       return;
     }
     const amountSats: number = BASE_SATS + SATS_PER_NFT * quantity;
     const t: number = Date.now();
-    persist({
+    const fresh: MintOrder = {
       token: randomToken(),
       address: addr,
       quantity,
@@ -170,12 +204,15 @@ export default function ClaimPage(): React.JSX.Element {
       expiresAt: t + RESERVATION_MS,
       status: "awaiting_payment",
       txid: "",
+    };
+    void persist(fresh).then((ok: boolean) => {
+      if (!ok) return;
+      setTxid("");
+      setPaymentMsg(EMPTY_FLASH);
+      setMessage({ text: "Reserved for one hour. Send payment, then submit the hash.", tone: "success" });
+      setNow(Date.now());
+      scrollToId("#qm-payment");
     });
-    setTxid("");
-    setPaymentMsg(EMPTY_FLASH);
-    setMessage({ text: "Reserved for one hour. Send payment, then submit the hash.", tone: "success" });
-    setNow(Date.now());
-    scrollToId("#qm-payment");
   };
 
   const submitTxid = (e: React.FormEvent<HTMLFormElement>): void => {
@@ -187,12 +224,14 @@ export default function ClaimPage(): React.JSX.Element {
       return;
     }
     const next: MintOrder = { ...order, txid: v, status: "verified" satisfies OrderStatus };
-    persist(next);
-    setPaymentMsg({
-      text: "Hash recorded. Your claim is queued for review and delivery.",
-      tone: "success",
+    void persist(next).then((ok: boolean) => {
+      if (!ok) return;
+      setPaymentMsg({
+        text: "Hash recorded. Your claim is queued for review and delivery.",
+        tone: "success",
+      });
+      showToast("Payment hash recorded");
     });
-    showToast("Payment hash recorded");
   };
 
   const startAnother = (): void => {
@@ -381,9 +420,10 @@ export default function ClaimPage(): React.JSX.Element {
             </p>
             <button
               type="submit"
+              disabled={busy}
               className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] bg-brand-deep px-[22px] text-sm font-bold text-white transition hover:-translate-y-px hover:bg-brand disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Reserve my pieces →
+              {busy ? "Reserving…" : "Reserve my pieces →"}
             </button>
           </form>
           <div className="pb-1">
@@ -495,9 +535,10 @@ export default function ClaimPage(): React.JSX.Element {
               />
               <button
                 type="submit"
-                className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] border border-line bg-transparent px-[22px] text-sm font-semibold text-brand-ink transition hover:border-brand hover:bg-brand/10"
+                disabled={busy}
+                className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] border border-line bg-transparent px-[22px] text-sm font-semibold text-brand-ink transition hover:border-brand hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-45"
               >
-                Submit payment hash
+                {busy ? "Saving…" : "Submit payment hash"}
               </button>
             </form>
             <button
@@ -530,9 +571,9 @@ export default function ClaimPage(): React.JSX.Element {
         )}
 
         <p className="mx-1.5 mt-5 text-[11.5px] leading-[1.75] break-words text-faint">
-          Demo build — no real chain, no real delivery. Orders are kept in this browser
-          until you connect a database (see the Admin page). The claim stays open until
-          all 1,000 pieces are gone; unpaid reservations release after one hour.
+          Demo build — no real chain, no real delivery. Orders are stored in the
+          shared database. The claim stays open until all 1,000 pieces are
+          gone; unpaid reservations release after one hour.
         </p>
       </main>
 

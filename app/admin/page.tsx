@@ -2,21 +2,16 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  USE_API,
-  clearOrders,
-  listOrders,
-  removeOrder,
-  saveOrder,
+  clearOrdersAdmin,
+  listOrdersAdmin,
+  removeOrderAdmin,
+  saveOrderAdmin,
   type MintOrder,
 } from "@/lib/orders";
 import { Shell, SiteHeader, TextInput, Toast, cn } from "@/components/ui";
 
-/** Demo gate. Replace with real auth (e.g. middleware + session) in production. */
-const DEMO_CODE: string =
-  process.env.NEXT_PUBLIC_ADMIN_CODE !== undefined &&
-  process.env.NEXT_PUBLIC_ADMIN_CODE.length > 0
-    ? process.env.NEXT_PUBLIC_ADMIN_CODE
-    : "shhh-demo";
+/** Session key for the admin code (sent as x-admin-code, checked against server ADMIN_CODE). */
+const ADMIN_SESSION_KEY = "qm-admin-code";
 
 interface DashboardStats {
   orders: number;
@@ -39,38 +34,52 @@ function age(ts: number): string {
 }
 
 export default function AdminPage(): React.JSX.Element {
-  const [unlocked, setUnlocked] = useState<boolean>(false);
+  const [adminCode, setAdminCode] = useState<string | null>(null);
   const [code, setCode] = useState<string>("");
   const [gateError, setGateError] = useState<string>("");
+  const [unlocking, setUnlocking] = useState<boolean>(false);
   const [orders, setOrders] = useState<MintOrder[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState<string>("");
   const [toast, setToast] = useState<string>("");
   const [deleteTarget, setDeleteTarget] = useState<MintOrder | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem("qm-admin") === "1") setUnlocked(true);
+      const saved: string | null = sessionStorage.getItem(ADMIN_SESSION_KEY);
+      if (saved !== null && saved !== "") setAdminCode(saved);
     } catch {
       /* ignore */
     }
   }, []);
 
-  const refresh = useCallback((): void => {
-    try {
-      setOrders(listOrders());
-    } catch {
-      setOrders([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (unlocked) refresh();
-  }, [unlocked, refresh]);
-
   const showToast = useCallback((msg: string): void => {
     setToast(msg);
     window.setTimeout(() => setToast(""), 2400);
   }, []);
+
+  const refresh = useCallback(
+    async (codeOverride?: string): Promise<void> => {
+      const key: string | null = codeOverride ?? adminCode;
+      if (key === null) return;
+      setLoading(true);
+      setLoadError("");
+      try {
+        setOrders(await listOrdersAdmin(key));
+      } catch {
+        setLoadError("Could not load orders — wrong code or database unavailable.");
+        setOrders([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [adminCode]
+  );
+
+  useEffect(() => {
+    if (adminCode !== null) void refresh();
+  }, [adminCode, refresh]);
 
   const copy = useCallback(
     async (value: string, label: string): Promise<void> => {
@@ -101,34 +110,52 @@ export default function AdminPage(): React.JSX.Element {
 
   const unlock = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
-    if (code === DEMO_CODE) {
-      setUnlocked(true);
-      try {
-        sessionStorage.setItem("qm-admin", "1");
-      } catch {
-        /* ignore */
-      }
-    } else {
-      setGateError("Wrong code. Hint: the demo default is shown below.");
+    const v: string = code.trim();
+    if (v === "") {
+      setGateError("Enter the admin code.");
+      return;
     }
+    setUnlocking(true);
+    setGateError("");
+    listOrdersAdmin(v)
+      .then((list: MintOrder[]) => {
+        setAdminCode(v);
+        setOrders(list);
+        try {
+          sessionStorage.setItem(ADMIN_SESSION_KEY, v);
+        } catch {
+          /* ignore */
+        }
+      })
+      .catch(() => {
+        setGateError("Wrong code, or the database is unavailable.");
+      })
+      .finally(() => {
+        setUnlocking(false);
+      });
   };
 
   const toggleStatus = (o: MintOrder): void => {
+    if (adminCode === null) return;
     const next: MintOrder = {
       ...o,
       status: o.status === "verified" ? "awaiting_payment" : "verified",
     };
-    saveOrder(next);
-    refresh();
+    saveOrderAdmin(next, adminCode)
+      .then(() => refresh())
+      .catch(() => showToast("Could not update order"));
   };
 
   const confirmDelete = useCallback((): void => {
-    if (deleteTarget === null) return;
-    removeOrder(deleteTarget.token);
-    setDeleteTarget(null);
-    refresh();
-    showToast("Order removed");
-  }, [deleteTarget, refresh, showToast]);
+    if (deleteTarget === null || adminCode === null) return;
+    removeOrderAdmin(deleteTarget.token, adminCode)
+      .then(() => {
+        setDeleteTarget(null);
+        showToast("Order removed");
+        return refresh();
+      })
+      .catch(() => showToast("Could not delete order"));
+  }, [deleteTarget, adminCode, refresh, showToast]);
 
   const cancelDelete = useCallback((): void => {
     setDeleteTarget(null);
@@ -165,7 +192,7 @@ export default function AdminPage(): React.JSX.Element {
     URL.revokeObjectURL(url);
   };
 
-  if (!unlocked) {
+  if (adminCode === null) {
     return (
       <Shell>
         <SiteHeader
@@ -183,7 +210,7 @@ export default function AdminPage(): React.JSX.Element {
               <div className="min-w-0">
                 <h2 className="font-display text-base font-semibold break-words">Admin access</h2>
                 <p className="mt-[3px] text-xs break-words text-mut">
-                  Demo gate — swap for real auth before going live.
+                  Enter the server admin code to view orders.
                 </p>
               </div>
             </div>
@@ -202,9 +229,10 @@ export default function AdminPage(): React.JSX.Element {
               />
               <button
                 type="submit"
-                className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] bg-brand-deep px-[22px] text-sm font-bold text-white transition hover:bg-brand"
+                disabled={unlocking}
+                className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] bg-brand-deep px-[22px] text-sm font-bold text-white transition hover:bg-brand disabled:cursor-not-allowed disabled:opacity-45"
               >
-                Unlock dashboard →
+                {unlocking ? "Checking…" : "Unlock dashboard →"}
               </button>
             </form>
             <p
@@ -215,7 +243,7 @@ export default function AdminPage(): React.JSX.Element {
             >
               {gateError !== ""
                 ? gateError
-                : "Demo default code: shhh-demo (override with NEXT_PUBLIC_ADMIN_CODE)"}
+                : "The code is checked against the server (ADMIN_CODE)."}
             </p>
           </section>
         </main>
@@ -228,8 +256,8 @@ export default function AdminPage(): React.JSX.Element {
     <Shell>
       <SiteHeader
         tag="ADMIN"
-        badge={USE_API ? "DB CONNECTED" : "LOCAL DEMO STORE"}
-        badgeTone={USE_API ? "ok" : "warn"}
+        badge="DB CONNECTED"
+        badgeTone="ok"
         links={[{ href: "/claim", label: "← Claim page" }]}
       />
 
@@ -285,7 +313,7 @@ export default function AdminPage(): React.JSX.Element {
 
         <div className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
           {[
-            { label: "↻ Refresh", action: refresh, disabled: false },
+            { label: loading ? "↻ Loading…" : "↻ Refresh", action: () => void refresh(), disabled: loading },
             { label: "↓ Export CSV", action: exportCsv, disabled: orders.length === 0 },
           ].map((b) => (
             <button
@@ -300,17 +328,27 @@ export default function AdminPage(): React.JSX.Element {
           ))}
           <button
             type="button"
-            disabled={orders.length === 0}
+            disabled={orders.length === 0 || adminCode === null}
             onClick={() => {
-              clearOrders();
-              refresh();
-              showToast("All demo orders cleared");
+              if (adminCode === null) return;
+              clearOrdersAdmin(adminCode)
+                .then(() => {
+                  showToast("All orders cleared");
+                  return refresh();
+                })
+                .catch(() => showToast("Could not clear orders"));
             }}
             className="inline-flex min-h-11 w-full items-center justify-center rounded-[10px] border border-line bg-transparent px-[22px] py-2.5 text-[13px] font-semibold text-brand-ink transition hover:border-brand hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
           >
             Clear all
           </button>
         </div>
+
+        {loadError !== "" && (
+          <p className="mt-3 rounded-[10px] border border-bad/30 bg-bad/10 px-3.5 py-3 text-[12px] leading-relaxed break-words text-bad">
+            {loadError}
+          </p>
+        )}
 
         {orders.length === 0 ? (
           <div className="mt-3.5 rounded-[14px] border border-line bg-card px-5 py-10 text-center text-[13px] break-words text-faint">
@@ -499,22 +537,18 @@ export default function AdminPage(): React.JSX.Element {
           <span aria-hidden="true" className="flex-none">◈</span>
           <div className="min-w-0">
             <b className="text-ink">
-              Database status: {USE_API ? "API mode" : "not connected (local demo store)"}.
+              Database status: connected (MongoDB via /api/orders).
             </b>
             <br />
-            Orders currently live in this browser only. To go live, implement{" "}
+            Orders are stored in the shared database. Make sure{" "}
             <code className="rounded-[5px] bg-brand/10 px-1.5 py-px font-mono text-[11px] break-all text-brand-ink">
-              app/api/orders/route.ts
+              MONGODB_URI
             </code>{" "}
-            against your database, then set{" "}
+            and{" "}
             <code className="rounded-[5px] bg-brand/10 px-1.5 py-px font-mono text-[11px] break-all text-brand-ink">
-              USE_API = true
+              ADMIN_CODE
             </code>{" "}
-            in{" "}
-            <code className="rounded-[5px] bg-brand/10 px-1.5 py-px font-mono text-[11px] break-all text-brand-ink">
-              lib/orders.ts
-            </code>{" "}
-            — this dashboard and the claim page switch over with no UI changes.
+            are set in the hosting environment.
           </div>
         </div>
       </main>
