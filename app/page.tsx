@@ -1,9 +1,5 @@
-const page = () => {
-  return (
-    <div>
-      Hello
-    </div>
-  );
-}
+import { redirect } from "next/navigation";
 
-export default page;
+export default function Home() {
+  redirect("/claim");
+}
