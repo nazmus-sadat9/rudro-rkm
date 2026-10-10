@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "shhhhhcat — Claim",
+  title: "Oblyx — Claim",
   description:
     "Claim a piece of the 1,000-piece silent drop. Free art, one manual fee payment. Frontend demo.",
 };

@@ -19,15 +19,15 @@ type BrandProps = Readonly<{ tag: string; href?: string }>;
 
 export function Brand({ tag, href = "/claim" }: BrandProps): React.JSX.Element {
   return (
-    <a href={href} className="flex min-w-0 items-center gap-2" aria-label="shhhhhcat home">
+    <a href={href} className="flex min-w-0 items-center gap-2" aria-label="Oblyx home">
       <span
         aria-hidden="true"
         className="grid h-8 w-8 flex-none place-items-center rounded-[9px] bg-brand-deep font-display text-base font-bold text-white"
       >
-        S
+        O
       </span>
       <span className="hidden min-w-0 truncate font-display text-lg font-bold tracking-tight min-[400px]:inline">
-        shhhhhcat
+        Oblyx
       </span>
       <small className="flex-none rounded-full border border-line bg-card px-2.5 py-1 font-mono text-[10px] tracking-[1.5px] text-mut">
         {tag}
