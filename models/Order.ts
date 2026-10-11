@@ -20,4 +20,6 @@ const OrderSchema = new Schema<MintOrder>(
   { versionKey: false }
 );
 
+OrderSchema.index({ createdAt: -1 });
+
 export default mongoose.models.Order ?? mongoose.model<MintOrder>("Order", OrderSchema);

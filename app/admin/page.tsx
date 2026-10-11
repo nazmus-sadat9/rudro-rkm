@@ -256,8 +256,8 @@ export default function AdminPage(): React.JSX.Element {
     <Shell>
       <SiteHeader
         tag="ADMIN"
-        badge="DB CONNECTED"
-        badgeTone="ok"
+        badge={loadError !== "" ? "DB UNREACHABLE" : "DB CONNECTED"}
+        badgeTone={loadError !== "" ? "warn" : "ok"}
         links={[{ href: "/claim", label: "← Claim page" }]}
       />
 

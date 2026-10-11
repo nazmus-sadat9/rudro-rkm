@@ -1,14 +1,43 @@
 import mongoose from "mongoose";
 
-const uri = process.env.MONGODB_URI as string;
-const g = globalThis as unknown as {
-  _mongoose?: { conn: typeof mongoose | null; p: Promise<typeof mongoose> | null };
-};
-const cache = (g._mongoose ??= { conn: null, p: null });
+interface MongooseCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+}
 
-export async function connectDB() {
-  if (cache.conn) return cache.conn;
-  cache.p ??= mongoose.connect(uri);
-  cache.conn = await cache.p;
+declare global {
+  // eslint-disable-next-line no-var
+  var _mongooseCache: MongooseCache | undefined;
+}
+
+function getCache(): MongooseCache {
+  if (globalThis._mongooseCache === undefined) {
+    globalThis._mongooseCache = { conn: null, promise: null };
+  }
+  return globalThis._mongooseCache;
+}
+
+/**
+ * Connect to MongoDB once and reuse the connection across
+ * hot-reloads (dev) and warm serverless invocations (prod).
+ * Throws a clear error when MONGODB_URI is not configured.
+ */
+export async function connectDB(): Promise<typeof mongoose> {
+  const cache: MongooseCache = getCache();
+  if (cache.conn !== null) return cache.conn;
+
+  const uri: string | undefined = process.env.MONGODB_URI;
+  if (uri === undefined || uri === "") {
+    throw new Error("MONGODB_URI is not set — add it to .env.local / hosting env vars.");
+  }
+
+  if (cache.promise === null) {
+    cache.promise = mongoose.connect(uri).catch((err: unknown) => {
+      // Allow the next call to retry instead of reusing a rejection.
+      cache.promise = null;
+      throw err;
+    });
+  }
+  cache.conn = await cache.promise;
   return cache.conn;
 }
