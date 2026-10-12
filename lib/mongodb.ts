@@ -32,11 +32,13 @@ export async function connectDB(): Promise<typeof mongoose> {
   }
 
   if (cache.promise === null) {
-    cache.promise = mongoose.connect(uri).catch((err: unknown) => {
-      // Allow the next call to retry instead of reusing a rejection.
-      cache.promise = null;
-      throw err;
-    });
+    cache.promise = mongoose
+      .connect(uri, { dbName: "oblyx" })
+      .catch((err: unknown) => {
+        // Allow the next call to retry instead of reusing a rejection.
+        cache.promise = null;
+        throw err;
+      });
   }
   cache.conn = await cache.promise;
   return cache.conn;
