@@ -201,23 +201,17 @@ export default function AdminPage(): React.JSX.Element {
           badgeTone="warn"
           links={[{ href: "/claim", label: "← Claim page" }]}
         />
-        <main className="w-full max-w-[460px] min-w-0">
-          <section className="mt-3.5 min-w-0 overflow-hidden rounded-[18px] border border-line bg-card shadow-[0_18px_44px_rgba(0,0,0,0.35)]">
-            <div className="flex min-w-0 items-center gap-3 border-b border-line bg-card2 p-4 sm:px-[22px]">
-              <span className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-brand-deep font-mono text-[13px] font-bold text-white">
-                ✦
-              </span>
-              <div className="min-w-0">
-                <h2 className="font-display text-base font-semibold break-words">Admin access</h2>
-                <p className="mt-[3px] text-xs break-words text-mut">
-                  Enter the server admin code to view orders.
-                </p>
+        <main className="ob-narrow">
+          <section className="ob-card ob-card--flat">
+            <div className="ob-card-head">
+              <span className="ob-card-num">✦</span>
+              <div>
+                <h2>Admin access</h2>
+                <p>Enter the server admin code to view orders.</p>
               </div>
             </div>
-            <form onSubmit={unlock} className="grid min-w-0 gap-2 p-4 sm:px-[22px] sm:pt-5 sm:pb-2">
-              <span className="mt-2 font-mono text-[10px] tracking-[1.4px] text-faint">
-                ACCESS CODE
-              </span>
+            <form onSubmit={unlock} className="ob-form">
+              <span className="ob-label">ACCESS CODE</span>
               <TextInput
                 id="qm-admin-code"
                 value={code}
@@ -227,20 +221,11 @@ export default function AdminPage(): React.JSX.Element {
                   setGateError("");
                 }}
               />
-              <button
-                type="submit"
-                disabled={unlocking}
-                className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] bg-brand-deep px-[22px] text-sm font-bold text-white transition hover:bg-brand disabled:cursor-not-allowed disabled:opacity-45"
-              >
+              <button type="submit" disabled={unlocking} className="ob-btn">
                 {unlocking ? "Checking…" : "Unlock dashboard →"}
               </button>
             </form>
-            <p
-              className={cn(
-                "min-h-[22px] px-4 pb-4 text-[12.5px] leading-relaxed break-words sm:px-[22px]",
-                gateError !== "" ? "text-bad" : "text-mut"
-              )}
-            >
+            <p className={cn("ob-msg", gateError !== "" && "ob-msg--error")}>
               {gateError !== ""
                 ? gateError
                 : "The code is checked against the server (ADMIN_CODE)."}
@@ -261,71 +246,58 @@ export default function AdminPage(): React.JSX.Element {
         links={[{ href: "/claim", label: "← Claim page" }]}
       />
 
-      <main className="min-w-0">
-        <section className="max-w-[720px] min-w-0 pt-7 text-left sm:pt-[30px]">
-          <span className="inline-flex items-center gap-2 font-mono text-[11px] font-medium tracking-[2px] text-brand">
-            <span aria-hidden="true" className="h-[2px] w-[22px] flex-none rounded-sm bg-brand" />
+      <main>
+        <section className="ob-hero ob-hero--tight">
+          <span className="ob-kicker">
+            <span aria-hidden="true" className="ob-kicker-bar" />
             DASHBOARD
           </span>
-          <h1 className="mt-4 mb-3.5 font-display text-[34px] leading-[1.05] font-semibold tracking-tight break-words sm:text-5xl lg:text-[60px]">
-            Every claim, <em className="text-brand not-italic">one table.</em>
+          <h1 className="ob-title">
+            Every claim, <em>one table.</em>
           </h1>
-          <p className="max-w-[600px] text-sm leading-[1.75] text-mut sm:text-[15px]">
+          <p className="ob-lead">
             Review incoming claims, flip their status, and export for reconciliation.
           </p>
         </section>
 
-        <section className="mt-6 min-w-0 rounded-[18px] border border-line bg-card p-4 shadow-[0_18px_44px_rgba(0,0,0,0.35)] sm:p-6">
-          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-            <h2 className="font-display text-[15px] font-semibold tracking-tight">
-              Overview · out of 1,000
-            </h2>
-            <span className="font-mono text-xs break-words text-mut">
-              <b className="font-display text-2xl font-semibold tracking-tight text-ink">
-                {stats.pieces.toLocaleString("en-US")}
-              </b>{" "}
-              / 1,000 pieces requested
+        <section className="ob-panel">
+          <div className="ob-panel-head">
+            <h2>Overview · out of 1,000</h2>
+            <span className="ob-panel-count">
+              <b>{stats.pieces.toLocaleString("en-US")}</b> / 1,000 pieces requested
             </span>
           </div>
-          <div className="mt-4 grid min-w-0 grid-cols-2 gap-2.5 lg:grid-cols-3">
+          <div className="ob-stats">
             {[
               { k: "ORDERS", v: String(stats.orders) },
               { k: "VERIFIED", v: String(stats.verified) },
               { k: "PENDING", v: String(stats.pending) },
             ].map((s, i) => (
-              <div
-                key={s.k}
-                className={cn(
-                  "min-w-0 rounded-xl border border-line bg-deep/60 px-3.5 py-3",
-                  i === 2 && "col-span-2 lg:col-span-1"
-                )}
-              >
-                <small className="block font-mono text-[9px] tracking-[1.4px] text-faint">
-                  {s.k}
-                </small>
-                <strong className="mt-[7px] block font-display text-base font-semibold tracking-tight break-words text-white sm:text-[19px]">
-                  {s.v}
-                </strong>
+              <div key={s.k} className={cn("ob-stat", i === 2 && "ob-stat--wide")}>
+                <small>{s.k}</small>
+                <strong>{s.v}</strong>
               </div>
             ))}
           </div>
         </section>
 
-        <div className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
-          {[
-            { label: loading ? "↻ Loading…" : "↻ Refresh", action: () => void refresh(), disabled: loading },
-            { label: "↓ Export CSV", action: exportCsv, disabled: orders.length === 0 },
-          ].map((b) => (
-            <button
-              key={b.label}
-              type="button"
-              onClick={b.action}
-              disabled={b.disabled}
-              className="inline-flex min-h-11 w-full items-center justify-center rounded-[10px] border border-line bg-transparent px-[22px] py-2.5 text-[13px] font-semibold text-brand-ink transition hover:border-brand hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
-            >
-              {b.label}
-            </button>
-          ))}
+        <div className="ob-toolbar">
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading}
+            className="ob-tool-btn"
+          >
+            {loading ? "↻ Loading…" : "↻ Refresh"}
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={orders.length === 0}
+            className="ob-tool-btn"
+          >
+            ↓ Export CSV
+          </button>
           <button
             type="button"
             disabled={orders.length === 0 || adminCode === null}
@@ -338,69 +310,58 @@ export default function AdminPage(): React.JSX.Element {
                 })
                 .catch(() => showToast("Could not clear orders"));
             }}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-[10px] border border-line bg-transparent px-[22px] py-2.5 text-[13px] font-semibold text-brand-ink transition hover:border-brand hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+            className="ob-tool-btn"
           >
             Clear all
           </button>
         </div>
 
-        {loadError !== "" && (
-          <p className="mt-3 rounded-[10px] border border-bad/30 bg-bad/10 px-3.5 py-3 text-[12px] leading-relaxed break-words text-bad">
-            {loadError}
-          </p>
-        )}
+        {loadError !== "" && <p className="ob-alert">{loadError}</p>}
 
         {orders.length === 0 ? (
-          <div className="mt-3.5 rounded-[14px] border border-line bg-card px-5 py-10 text-center text-[13px] break-words text-faint">
+          <div className="ob-empty">
             No claims yet. Submit one on the claim page and it will show up here.
           </div>
         ) : (
           <>
             {/* Mobile: stacked cards — no horizontal scroll, no clipped columns */}
-            <div className="mt-3.5 grid min-w-0 gap-2.5 md:hidden">
+            <div className="ob-cards">
               {orders.map((o: MintOrder) => (
                 <article
                   key={o.token}
                   onClick={(e: React.MouseEvent<HTMLElement>) => toggleRow(e, o.token)}
-                  className="min-w-0 rounded-[14px] border border-line bg-card p-4"
+                  className="ob-order-card"
                 >
-                  <div className="flex min-w-0 items-start justify-between gap-2">
-                    <p className="min-w-0 flex-1 font-mono text-[11px] break-all text-mut">
+                  <div className="ob-order-top">
+                    <p className="ob-order-addr">
                       {expanded === o.token ? "▾ " : "▸ "}
                       {short(o.address)}
                     </p>
-                    <span
-                      className={cn(
-                        "flex-none rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold whitespace-nowrap",
-                        o.status === "verified"
-                          ? "border-ok/40 bg-ok/10 text-ok"
-                          : "border-warn/40 bg-warn/10 text-warn"
-                      )}
-                    >
+                    <span className={cn("ob-pill", o.status === "verified" ? "ob-pill--ok" : "ob-pill--await")}>
                       {o.status === "verified" ? "VERIFIED" : "AWAITING"}
                     </span>
                   </div>
-                  <p className="mt-1.5 font-mono text-[11px] break-words text-faint">
+                  <p className="ob-order-sub">
                     QTY {o.quantity} · {age(o.createdAt)} · {o.amountSats.toLocaleString("en-US")} sats
                   </p>
-                  <div className="mt-2.5 grid grid-cols-2 gap-2">
+                  <div className="ob-order-actions">
                     <button
                       type="button"
                       onClick={() => toggleStatus(o)}
-                      className="min-h-10 rounded-lg border border-ok/50 bg-ok/10 px-2 py-2 font-mono text-[11px] whitespace-nowrap text-ok transition hover:bg-ok/20"
+                      className="ob-mini ob-mini--verify"
                     >
                       {o.status === "verified" ? "Reopen" : "Verify"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(o)}
-                      className="min-h-10 rounded-lg border border-bad/50 bg-bad/10 px-2 py-2 font-mono text-[11px] whitespace-nowrap text-bad transition hover:border-bad"
+                      className="ob-mini ob-mini--danger"
                     >
                       Delete
                     </button>
                   </div>
                   {expanded === o.token && (
-                    <div className="mt-3 grid min-w-0 gap-2.5 border-t border-line pt-3">
+                    <div className="ob-detail">
                       <DetailRow
                         label="FULL ADDRESS"
                         value={o.address}
@@ -428,18 +389,13 @@ export default function AdminPage(): React.JSX.Element {
             </div>
 
             {/* Desktop: full table */}
-            <div className="mt-3.5 hidden min-w-0 overflow-x-auto rounded-[14px] border border-line bg-card md:block">
-              <table className="w-full min-w-[760px] border-collapse text-xs">
+            <div className="ob-dtable-wrap">
+              <table className="ob-dtable">
                 <thead>
-                  <tr className="bg-card2">
+                  <tr>
                     {["DELIVERY ADDRESS", "QTY", "FEE (SATS)", "STATUS", "TX HASH", "AGE", ""].map(
                       (h: string) => (
-                        <th
-                          key={h}
-                          className="border-b border-line px-3.5 py-3 text-left font-mono text-[9px] font-semibold tracking-[1.4px] whitespace-nowrap text-faint"
-                        >
-                          {h}
-                        </th>
+                        <th key={h}>{h}</th>
                       )
                     )}
                   </tr>
@@ -450,47 +406,38 @@ export default function AdminPage(): React.JSX.Element {
                       <tr
                         onClick={(e: React.MouseEvent<HTMLTableRowElement>) => toggleRow(e, o.token)}
                         title="Click to expand details"
-                        className="cursor-pointer transition hover:bg-brand/5"
+                        className="ob-row"
                       >
-                        <td className="border-b border-line px-3.5 py-3 font-mono text-[11px] break-all text-mut" title={o.address}>
+                        <td className="ob-mono" title={o.address}>
                           {expanded === o.token ? "▾ " : "▸ "}
                           {short(o.address)}
                         </td>
-                        <td className="border-b border-line px-3.5 py-3 whitespace-nowrap">{o.quantity}</td>
-                        <td className="border-b border-line px-3.5 py-3 font-mono text-[11px] whitespace-nowrap text-mut">
+                        <td className="ob-nowrap">{o.quantity}</td>
+                        <td className="ob-mono ob-nowrap">
                           {o.amountSats.toLocaleString("en-US")}
                         </td>
-                        <td className="border-b border-line px-3.5 py-3 whitespace-nowrap">
-                          <span
-                            className={cn(
-                              "inline-block rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold whitespace-nowrap",
-                              o.status === "verified"
-                                ? "border-ok/40 bg-ok/10 text-ok"
-                                : "border-warn/40 bg-warn/10 text-warn"
-                            )}
-                          >
+                        <td className="ob-nowrap">
+                          <span className={cn("ob-pill", o.status === "verified" ? "ob-pill--ok" : "ob-pill--await")}>
                             {o.status === "verified" ? "VERIFIED" : "AWAITING"}
                           </span>
                         </td>
-                        <td className="border-b border-line px-3.5 py-3 font-mono text-[11px] whitespace-nowrap text-mut" title={o.txid}>
+                        <td className="ob-mono ob-nowrap" title={o.txid}>
                           {o.txid !== "" ? short(o.txid, 8, 6) : "—"}
                         </td>
-                        <td className="border-b border-line px-3.5 py-3 font-mono text-[11px] whitespace-nowrap text-mut">
-                          {age(o.createdAt)}
-                        </td>
-                        <td className="border-b border-line px-3.5 py-3 whitespace-nowrap">
-                          <div className="flex gap-1.5">
+                        <td className="ob-mono ob-nowrap">{age(o.createdAt)}</td>
+                        <td className="ob-nowrap">
+                          <div className="ob-row-btns">
                             <button
                               type="button"
                               onClick={() => toggleStatus(o)}
-                              className="rounded-lg border border-ok/50 bg-ok/10 px-2.5 py-1.5 font-mono text-[11px] whitespace-nowrap text-ok transition hover:bg-ok/20"
+                              className="ob-mini ob-mini--verify"
                             >
                               {o.status === "verified" ? "Reopen" : "Verify"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setDeleteTarget(o)}
-                              className="rounded-lg border border-bad/50 bg-bad/10 px-2.5 py-1.5 font-mono text-[11px] whitespace-nowrap text-bad transition hover:border-bad"
+                              className="ob-mini ob-mini--danger"
                             >
                               Delete
                             </button>
@@ -498,9 +445,9 @@ export default function AdminPage(): React.JSX.Element {
                         </td>
                       </tr>
                       {expanded === o.token && (
-                        <tr key={`${o.token}-detail`} className="bg-card2">
-                          <td colSpan={7} className="border-b border-line px-3.5 py-3">
-                            <div className="grid min-w-0 gap-2">
+                        <tr key={`${o.token}-detail`} className="ob-detail-row">
+                          <td colSpan={7}>
+                            <div className="ob-detail">
                               <DetailRow
                                 label="FULL ADDRESS"
                                 value={o.address}
@@ -533,22 +480,14 @@ export default function AdminPage(): React.JSX.Element {
           </>
         )}
 
-        <div className="mt-3.5 flex min-w-0 items-start gap-2.5 rounded-xl border border-line bg-card px-4 py-3.5 text-xs leading-[1.65] break-words text-mut">
-          <span aria-hidden="true" className="flex-none">◈</span>
-          <div className="min-w-0">
-            <b className="text-ink">
-              Database status: connected (MongoDB via /api/orders).
-            </b>
+        <div className="ob-db">
+          <span aria-hidden="true">◈</span>
+          <div>
+            <b>Database status: connected (MongoDB via /api/orders).</b>
             <br />
             Orders are stored in the shared database. Make sure{" "}
-            <code className="rounded-[5px] bg-brand/10 px-1.5 py-px font-mono text-[11px] break-all text-brand-ink">
-              MONGODB_URI
-            </code>{" "}
-            and{" "}
-            <code className="rounded-[5px] bg-brand/10 px-1.5 py-px font-mono text-[11px] break-all text-brand-ink">
-              ADMIN_CODE
-            </code>{" "}
-            are set in the hosting environment.
+            <code>MONGODB_URI</code> and <code>ADMIN_CODE</code> are set in the
+            hosting environment.
           </div>
         </div>
       </main>
@@ -579,47 +518,32 @@ function DeleteConfirmDialog({ order, onCancel, onConfirm }: DeleteConfirmDialog
       aria-modal="true"
       aria-labelledby="qm-delete-title"
       aria-describedby="qm-delete-desc"
-      className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+      className="ob-dialog"
     >
       <button
         type="button"
         aria-label="Close delete warning"
         onClick={onCancel}
-        className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-[2px]"
+        className="ob-dialog-veil"
       />
-      <div className="relative w-full min-w-0 max-w-sm rounded-2xl border border-line bg-card p-5 shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
-        <div className="flex min-w-0 items-start gap-3">
-          <span
-            aria-hidden="true"
-            className="grid h-10 w-10 flex-none place-items-center rounded-xl border border-bad/40 bg-bad/10 text-lg text-bad"
-          >
+      <div className="ob-dialog-box">
+        <div className="ob-dialog-top">
+          <span aria-hidden="true" className="ob-dialog-icon">
             ⚠
           </span>
-          <div className="min-w-0">
-            <h2 id="qm-delete-title" className="font-display text-base font-semibold break-words text-[#ff6b6b]" style={{ color: "#ff6b6b" }}>
-              Delete this claim?
-            </h2>
-            <p id="qm-delete-desc" className="mt-1 text-xs leading-relaxed break-words text-mut">
-              This permanently removes the order for{" "}
-              <span className="font-mono break-all text-ink">{short(order.address)}</span>{" "}
+          <div>
+            <h2 id="qm-delete-title">Delete this claim?</h2>
+            <p id="qm-delete-desc">
+              This permanently removes the order for <span>{short(order.address)}</span>{" "}
               (qty {order.quantity}). This can&apos;t be undone.
             </p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            autoFocus
-            onClick={onCancel}
-            className="inline-flex min-h-11 items-center justify-center rounded-[10px] border border-line bg-transparent px-4 text-[13px] font-semibold text-ink transition hover:border-brand hover:text-brand-ink"
-          >
+        <div className="ob-dialog-actions">
+          <button type="button" autoFocus onClick={onCancel} className="ob-dialog-cancel">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-bad px-4 text-[13px] font-bold text-card2 transition hover:brightness-110"
-          >
+          <button type="button" onClick={onConfirm} className="ob-dialog-confirm">
             Delete permanently
           </button>
         </div>
@@ -636,20 +560,12 @@ type DetailRowProps = Readonly<{
 
 function DetailRow({ label, value, onCopy }: DetailRowProps): React.JSX.Element {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-      <span className="flex-none font-mono text-[9px] font-semibold tracking-[1.2px] text-faint">
-        {label}
-      </span>
-      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-1 sm:flex-row sm:items-center sm:justify-end">
-        <code className="min-w-0 font-mono text-[11px] break-all text-mut sm:text-right">
-          {value}
-        </code>
+    <div className="ob-drow">
+      <span>{label}</span>
+      <div className="ob-drow-body">
+        <code>{value}</code>
         {onCopy !== undefined && (
-          <button
-            type="button"
-            onClick={onCopy}
-            className="h-9 flex-none rounded-lg border border-line bg-transparent px-3 font-mono text-[11px] whitespace-nowrap text-mut transition hover:border-brand hover:text-brand-ink"
-          >
+          <button type="button" onClick={onCopy}>
             Copy
           </button>
         )}
