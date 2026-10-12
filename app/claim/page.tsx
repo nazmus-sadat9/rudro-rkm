@@ -256,132 +256,90 @@ export default function ClaimPage(): React.JSX.Element {
         ]}
       />
 
-      <main className="min-w-0">
-        <section className="max-w-[720px] min-w-0 pt-8 text-left sm:pt-11">
-          <span className="inline-flex max-w-full flex-wrap items-center gap-2 font-mono text-[11px] font-medium tracking-[2px] text-brand">
-            <span aria-hidden="true" className="h-[2px] w-[22px] flex-none rounded-sm bg-brand" />
-            <span className="break-words">PUBLIC CLAIM · 1,000 PIECES</span>
+      <main>
+        <section className="ob-hero">
+          <span className="ob-kicker">
+            <span aria-hidden="true" className="ob-kicker-bar" />
+            <span>PUBLIC CLAIM · 1,000 PIECES</span>
           </span>
-          <h1 className="mt-4 mb-3.5 font-display text-[34px] leading-[1.05] font-semibold tracking-tight break-words sm:text-5xl lg:text-[60px]">
-            Claim the <em className="text-brand not-italic">quiet.</em>
+          <h1 className="ob-title">
+            Claim the <em>quiet.</em>
           </h1>
-          <p className="max-w-[600px] text-sm leading-[1.75] text-mut sm:text-[15px]">
+          <p className="ob-lead">
             A silent-edition drop of 1,000 pieces. The art itself is free — you only cover
             the inscription and delivery fee. Drop in a Taproot address you own, lock up
             to four pieces to it, send one manual payment, and paste the hash back here.
           </p>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="ob-chips">
             {[
               { k: "Supply", v: "1,000" },
               { k: "Price", v: "Free + fee" },
               { k: "Limit", v: "4 / address" },
               { k: "Payment", v: "Manual" },
             ].map((chip) => (
-              <span
-                key={chip.k}
-                className="rounded-full border border-line bg-card px-3 py-[7px] font-mono text-[11px] break-words text-mut"
-              >
-                {chip.k} <b className="font-medium text-ink">{chip.v}</b>
+              <span key={chip.k} className="ob-chip">
+                {chip.k} <b>{chip.v}</b>
               </span>
             ))}
           </div>
         </section>
 
-        <section
-          aria-label="Claim progress"
-          className="mt-6 min-w-0 rounded-[18px] border border-line bg-card p-4 shadow-[0_18px_44px_rgba(0,0,0,0.35)] sm:p-6"
-        >
-          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-            <h2 className="font-display text-[15px] font-semibold tracking-tight">
-              Collection progress
-            </h2>
-            <span className="font-mono text-xs break-words text-mut">
-              <b className="font-display text-2xl font-semibold tracking-tight text-ink">
-                {mintTotal.toLocaleString("en-US")}
-              </b>{" "}
-              / 1,000 claimed
+        <section aria-label="Claim progress" className="ob-panel">
+          <div className="ob-panel-head">
+            <h2>Collection progress</h2>
+            <span className="ob-panel-count">
+              <b>{mintTotal.toLocaleString("en-US")}</b> / 1,000 claimed
             </span>
           </div>
           <div
-            className="mt-4 h-[10px] overflow-hidden rounded-full border border-line bg-deep"
+            className="ob-progress"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={1000}
             aria-valuenow={mintTotal}
           >
-            <span
-              className="block h-full rounded-[inherit] bg-brand transition-[width] duration-700"
-              style={{ width: `${pct}%` }}
-            />
+            <span className="ob-progress-fill" style={{ width: `${pct}%` }} />
           </div>
-          <div className="mt-4 grid min-w-0 grid-cols-2 gap-2.5 lg:grid-cols-3">
-            <div className="min-w-0 rounded-xl border border-line bg-deep/60 px-3.5 py-3">
-              <small className="block font-mono text-[9px] tracking-[1.4px] text-faint">
-                REMAINING
-              </small>
-              <strong className="mt-[7px] block font-display text-base font-semibold tracking-tight break-words text-white sm:text-[19px]">
-                {remaining.toLocaleString("en-US")}
-              </strong>
+          <div className="ob-stats">
+            <div className="ob-stat">
+              <small>REMAINING</small>
+              <strong>{remaining.toLocaleString("en-US")}</strong>
             </div>
-            <div className="min-w-0 rounded-xl border border-line bg-deep/60 px-3.5 py-3">
-              <small className="block font-mono text-[9px] tracking-[1.4px] text-faint">
-                FEE PER PIECE
-              </small>
-              <strong className="mt-[7px] block font-display text-base font-semibold tracking-tight break-words text-white sm:text-[19px]">
-                ≈ {satsToBtc(SATS_PER_NFT)} BTC
-              </strong>
+            <div className="ob-stat">
+              <small>FEE PER PIECE</small>
+              <strong>≈ {satsToBtc(SATS_PER_NFT)} BTC</strong>
             </div>
-            <div className="col-span-2 min-w-0 rounded-xl border border-line bg-deep/60 px-3.5 py-3 lg:col-span-1">
-              <small className="block font-mono text-[9px] tracking-[1.4px] text-faint">
-                RESERVATION
-              </small>
-              <strong className="mt-[7px] block font-display text-base font-semibold tracking-tight break-words text-white sm:text-[19px]">
-                1 hour hold
-              </strong>
+            <div className="ob-stat ob-stat--wide">
+              <small>RESERVATION</small>
+              <strong>1 hour hold</strong>
             </div>
           </div>
         </section>
 
-        <ol id="qm-how" className="mt-3.5 grid list-none gap-2.5 p-0 sm:grid-cols-2">
+        <ol id="qm-how" className="ob-steps">
           {[
             { n: "01", h: "Lock your pieces", p: "Enter a bc1p address, pick 1–4 pieces, and reserve them for one hour." },
             { n: "02", h: "Pay + paste the hash", p: "Send the exact amount to the payment address, then submit the transaction hash." },
           ].map((s) => (
-            <li
-              key={s.n}
-              className="relative min-w-0 overflow-hidden rounded-[14px] border border-line bg-card p-[18px]"
-            >
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute top-0 right-3 font-display text-[54px] font-bold text-brand/10 select-none"
-              >
+            <li key={s.n} className="ob-step">
+              <span aria-hidden="true" className="ob-step-num">
                 {s.n}
               </span>
-              <h3 className="relative mb-1.5 text-sm font-semibold">{s.h}</h3>
-              <p className="relative text-[12.5px] leading-[1.65] text-mut">{s.p}</p>
+              <h3>{s.h}</h3>
+              <p>{s.p}</p>
             </li>
           ))}
         </ol>
 
-        <section
-          id="qm-order"
-          aria-labelledby="qm-order-title"
-          className="mt-3.5 min-w-0 overflow-hidden rounded-[18px] border border-line bg-card shadow-[0_18px_44px_rgba(0,0,0,0.35)]"
-        >
-          <div className="flex min-w-0 items-center gap-3 border-b border-line bg-card2 p-4 sm:px-[22px] sm:py-[19px]">
-            <span className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-brand-deep font-mono text-[13px] font-bold text-white">
-              01
-            </span>
-            <div className="min-w-0">
-              <h2 id="qm-order-title" className="font-display text-base font-semibold break-words">
-                Your delivery address
-              </h2>
-              <p className="mt-[3px] text-xs break-words text-mut">
-                Bitcoin mainnet Taproot address starting with bc1p.
-              </p>
+        <section id="qm-order" aria-labelledby="qm-order-title" className="ob-card">
+          <div className="ob-card-head">
+            <span className="ob-card-num">01</span>
+            <div>
+              <h2 id="qm-order-title">Your delivery address</h2>
+              <p>Bitcoin mainnet Taproot address starting with bc1p.</p>
             </div>
           </div>
-          <form onSubmit={reserve} className="grid min-w-0 gap-2 p-4 sm:px-[22px] sm:pt-5 sm:pb-2">
+          <form onSubmit={reserve} className="ob-form">
             <FieldLabel htmlFor="qm-address">DELIVERY ADDRESS</FieldLabel>
             <TextInput
               id="qm-address"
@@ -390,19 +348,14 @@ export default function ClaimPage(): React.JSX.Element {
               onChange={setAddress}
             />
             <FieldLabel>HOW MANY PIECES?</FieldLabel>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Quantity">
+            <div className="ob-seg" role="group" aria-label="Quantity">
               {[1, 2, 3, 4].map((n: number) => (
                 <button
                   key={n}
                   type="button"
                   onClick={() => setQuantity(n)}
                   aria-pressed={quantity === n}
-                  className={cn(
-                    "min-h-[50px] rounded-[10px] border font-display text-sm font-semibold transition",
-                    quantity === n
-                      ? "border-brand bg-brand/10 text-brand-ink ring-[3px] ring-brand/15"
-                      : "border-line bg-deep text-mut hover:border-brand/60 hover:text-ink"
-                  )}
+                  className={cn("ob-seg-btn", quantity === n && "ob-seg-btn--on")}
                 >
                   {n}
                 </button>
@@ -415,25 +368,15 @@ export default function ClaimPage(): React.JSX.Element {
               placeholder="Paste a code from an earlier order"
               onChange={setRecovery}
             />
-            <p className="text-[11.5px] leading-[1.6] break-words text-faint">
-              Four pieces max per address, including anything claimed before.
-            </p>
-            <button
-              type="submit"
-              disabled={busy}
-              className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] bg-brand-deep px-[22px] text-sm font-bold text-white transition hover:-translate-y-px hover:bg-brand disabled:cursor-not-allowed disabled:opacity-45"
-            >
+            <p className="ob-note">Four pieces max per address, including anything claimed before.</p>
+            <button type="submit" disabled={busy} className="ob-btn">
               {busy ? "Reserving…" : "Reserve my pieces →"}
             </button>
           </form>
-          <div className="pb-1">
+          <div>
             <FormMessage tone={message.tone} text={message.text} />
           </div>
-          <button
-            type="button"
-            onClick={() => setAddress(DEMO_BC1P)}
-            className="px-4 pb-5 text-left font-mono text-xs break-words text-brand hover:underline sm:px-[22px]"
-          >
+          <button type="button" onClick={() => setAddress(DEMO_BC1P)} className="ob-link-btn">
             → Fill a demo address
           </button>
         </section>
@@ -442,23 +385,17 @@ export default function ClaimPage(): React.JSX.Element {
           <section
             id="qm-payment"
             aria-labelledby="qm-payment-title"
-            className="mt-3.5 min-w-0 scroll-mt-4 overflow-hidden rounded-[18px] border border-line bg-card shadow-[0_18px_44px_rgba(0,0,0,0.35)]"
+            className="ob-card ob-scroll-anchor"
           >
-            <div className="flex min-w-0 items-center gap-3 border-b border-line bg-card2 p-4 sm:px-[22px] sm:py-[19px]">
-              <span className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-brand-deep font-mono text-[13px] font-bold text-white">
-                02
-              </span>
-              <div className="min-w-0">
-                <h2 id="qm-payment-title" className="font-display text-base font-semibold break-words">
-                  Manual payment
-                </h2>
-                <p className="mt-[3px] text-xs break-words text-mut">
-                  One transfer, exact amount, then paste the hash.
-                </p>
+            <div className="ob-card-head">
+              <span className="ob-card-num">02</span>
+              <div>
+                <h2 id="qm-payment-title">Manual payment</h2>
+                <p>One transfer, exact amount, then paste the hash.</p>
               </div>
             </div>
 
-            <dl className="mx-3 mt-[18px] min-w-0 overflow-hidden rounded-xl border border-line bg-deep sm:mx-[22px]">
+            <dl className="ob-facts">
               {[
                 { k: "DELIVER TO", v: order.address, hl: false },
                 { k: "PIECES", v: `${order.quantity} × free`, hl: false },
@@ -468,64 +405,38 @@ export default function ClaimPage(): React.JSX.Element {
                   hl: true,
                 },
               ].map((row) => (
-                <div
-                  key={row.k}
-                  className="flex min-w-0 flex-col gap-1 border-b border-line px-[15px] py-[13px] text-xs last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3.5"
-                >
-                  <dt className="flex-none font-mono text-[9px] tracking-[1.4px] text-faint">
-                    {row.k}
-                  </dt>
-                  <dd
-                    className={cn(
-                      "min-w-0 font-mono text-xs break-all sm:text-right",
-                      row.hl ? "text-brand-ink" : "text-ink"
-                    )}
-                  >
-                    {row.v}
-                  </dd>
+                <div key={row.k} className="ob-fact-row">
+                  <dt>{row.k}</dt>
+                  <dd className={cn(row.hl && "ob-hl")}>{row.v}</dd>
                 </div>
               ))}
             </dl>
 
-            <div className="px-3 sm:px-[22px]">
-              <span className="mt-3 inline-flex max-w-full flex-none flex-wrap items-center gap-[7px] rounded-full border border-warn/35 bg-warn/10 px-3 py-[7px] font-mono text-[11px] break-words text-warn">
+            <div>
+              <span className="ob-reserve-pill">
                 {expired
                   ? "⚠ reservation expired — start a new one"
                   : `◷ reserved · ${formatCountdown(order.expiresAt - now)} left`}
               </span>
             </div>
 
-            <div className="mx-3 mt-3.5 min-w-0 rounded-xl border border-line bg-brand/10 p-4 sm:mx-[22px]">
-              <h3 className="text-[13.5px] font-semibold break-words">
-                Send exactly {satsToBtc(order.amountSats)} BTC to
-              </h3>
-              <p className="mt-1.5 text-xs leading-[1.6] break-words text-mut">
-                Double-check the address — payments to the wrong address can&apos;t be matched.
-              </p>
-              <div className="mt-2.5 flex min-w-0 flex-col gap-2 sm:flex-row">
-                <code className="min-w-0 flex-1 rounded-lg border border-line bg-deep px-3 py-[11px] font-mono text-xs break-all text-brand-ink">
-                  {order.recipient}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void copy(order.recipient, "Payment address")}
-                  className="h-11 flex-none rounded-lg border border-line bg-card2 px-[15px] text-xs font-semibold text-ink transition hover:border-brand hover:text-brand-ink sm:w-auto"
-                >
+            <div className="ob-pay">
+              <h3>Send exactly {satsToBtc(order.amountSats)} BTC to</h3>
+              <p>Double-check the address — payments to the wrong address can&apos;t be matched.</p>
+              <div className="ob-copy">
+                <code>{order.recipient}</code>
+                <button type="button" onClick={() => void copy(order.recipient, "Payment address")}>
                   Copy
                 </button>
               </div>
             </div>
 
-            <div className="mx-3 mt-3.5 min-w-0 rounded-xl border border-line bg-deep px-[15px] py-3.5 sm:mx-[22px]">
-              <span className="font-mono text-[9px] tracking-[1.4px] break-words text-faint">
-                YOUR PRIVATE RECOVERY CODE — SAVE IT
-              </span>
-              <code className="mt-[7px] block min-w-0 font-mono text-xs break-all text-ink">
-                {order.token}
-              </code>
+            <div className="ob-codebox">
+              <span>YOUR PRIVATE RECOVERY CODE — SAVE IT</span>
+              <code>{order.token}</code>
             </div>
 
-            <form onSubmit={submitTxid} className="grid min-w-0 gap-2 p-4 sm:px-[22px] sm:pt-5 sm:pb-2">
+            <form onSubmit={submitTxid} className="ob-form">
               <FieldLabel htmlFor="qm-txid">TRANSACTION HASH</FieldLabel>
               <TextInput
                 id="qm-txid"
@@ -533,27 +444,23 @@ export default function ClaimPage(): React.JSX.Element {
                 placeholder="0x…"
                 onChange={setTxid}
               />
-              <button
-                type="submit"
-                disabled={busy}
-                className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] border border-line bg-transparent px-[22px] text-sm font-semibold text-brand-ink transition hover:border-brand hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-45"
-              >
+              <button type="submit" disabled={busy} className="ob-btn ob-btn--ghost">
                 {busy ? "Saving…" : "Submit payment hash"}
               </button>
             </form>
             <button
               type="button"
               onClick={() => setTxid(`0x${randomHex(32).toLowerCase()}`)}
-              className="px-4 pb-1 text-left font-mono text-xs break-words text-brand hover:underline sm:px-[22px]"
+              className="ob-link-btn"
             >
               → Generate a demo hash
             </button>
             {paymentMsg.text !== "" && (
-              <div className="pt-2 pb-1">
+              <div>
                 <FormMessage tone={paymentMsg.tone} text={paymentMsg.text} />
               </div>
             )}
-            <div className="mx-3 mt-3.5 mb-[22px] min-w-0 rounded-[10px] border border-bad/30 bg-bad/10 px-3.5 py-3 text-[11.5px] leading-[1.65] break-words text-bad sm:mx-[22px]">
+            <div className="ob-warnbox">
               Already paid? Sit tight — your pieces arrive after review. Never pay twice for
               the same order.
             </div>
@@ -561,16 +468,12 @@ export default function ClaimPage(): React.JSX.Element {
         )}
 
         {order !== null && (
-          <button
-            type="button"
-            onClick={startAnother}
-            className="mt-3.5 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-[10px] border border-line bg-transparent px-[22px] text-sm font-semibold text-brand-ink transition hover:border-brand hover:bg-brand/10"
-          >
+          <button type="button" onClick={startAnother} className="ob-btn ob-btn--ghost">
             Start a new claim
           </button>
         )}
 
-        <p className="mx-1.5 mt-5 text-[11.5px] leading-[1.75] break-words text-faint">
+        <p className="ob-foot">
           Demo build — no real chain, no real delivery. Orders are stored in the
           shared database. The claim stays open until all 1,000 pieces are
           gone; unpaid reservations release after one hour.
