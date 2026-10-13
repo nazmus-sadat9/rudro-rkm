@@ -1,24 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SITE, type Reservation } from "@/lib/config";
 import {
-  getReservation,
-  getReservationStats,
-  saveReservationAsync,
-  type Reservation,
-  type ReservationStats,
-} from "@/lib/reservations";
-import {
-  COMMENT_LABEL,
-  COMMENT_URL,
-  FOLLOW_HANDLE,
-  FOLLOW_URL,
-  LIKE_REPOST_LABEL,
-  LIKE_REPOST_URL,
-  MAX_PER_WALLET,
-  RESERVATION_SESSION_KEY,
-  SUPPLY_LIMIT,
-} from "@/lib/quest";
+  createMintReservation,
+  getMintStats,
+  saveReservation,
+  totalReserved,
+  normHandle,
+  validHandle,
+  validWallet,
+  makeCode,
+  type MintStats,
+} from "@/lib/store";
 import {
   FieldLabel,
   FormMessage,
@@ -29,270 +23,330 @@ import {
   cn,
 } from "@/components/ui";
 
-const XHANDLE_RE = /^@?[A-Za-z0-9_]{1,15}$/;
-const BC1P_RE = /^bc1p[023456789ac-hj-np-z]{58}$/;
-
-function newToken(): string {
-  try {
-    return crypto.randomUUID().replace(/-/g, "");
-  } catch {
-    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 18)}`;
-  }
-}
-
-function normalizeDisplay(raw: string): string {
-  const v = raw.trim();
-  return v.startsWith("@") ? v : `@${v}`;
-}
+type TaskKey = "follow" | "like" | "rt" | "cmt";
+const AUTO_DELAY = 6000; // fallback auto-confirm after X is opened
+const RETURN_MIN = 2500; // min time away before a return counts as done
 
 export default function Home(): React.JSX.Element {
-  const [stats, setStats] = useState<ReservationStats | null>(null);
-  const [statsError, setStatsError] = useState<string>("");
+  const [mounted, setMounted] = useState<boolean>(false);
+  const [step, setStep] = useState<number>(1);
+  const [handle, setHandle] = useState<string>("");
+  const [checkingHandle, setCheckingHandle] = useState<boolean>(false);
+  const [handleVerdict, setHandleVerdict] = useState<null | {
+    ok: boolean;
+    detail: string;
+    api: boolean;
+  }>(null);
 
-  const [xHandle, setXHandle] = useState<string>("");
-  const [tasks, setTasks] = useState<{ follow: boolean; likeRepost: boolean; comment: boolean }>({
+  const [done, setDone] = useState<Record<TaskKey, boolean>>({
     follow: false,
-    likeRepost: false,
-    comment: false,
+    like: false,
+    rt: false,
+    cmt: false,
   });
-  const [taskAt, setTaskAt] = useState<{ follow: number; likeRepost: number; comment: number }>({
-    follow: 0,
-    likeRepost: 0,
-    comment: 0,
-  });
-  const [opened, setOpened] = useState<{ follow: boolean; likeRepost: boolean; comment: boolean }>({
+  const [pending, setPending] = useState<Record<TaskKey, boolean>>({
     follow: false,
-    likeRepost: false,
-    comment: false,
+    like: false,
+    rt: false,
+    cmt: false,
   });
+  const openedAt = useRef<Record<TaskKey, number>>({ follow: 0, like: 0, rt: 0, cmt: 0 });
+  const timers = useRef<Partial<Record<TaskKey, ReturnType<typeof setTimeout>>>>({});
 
   const [wallet, setWallet] = useState<string>("");
-  const [quantity, setQuantity] = useState<number>(1);
+  const [qty, setQty] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [saved, setSaved] = useState<Reservation | null>(null);
   const [toast, setToast] = useState<string>("");
+  const [tick, setTick] = useState<number>(0);
+  const [stats, setStats] = useState<MintStats | null>(null);
+  const [dbDown, setDbDown] = useState<boolean>(false);
 
   const showToast = useCallback((msg: string): void => {
     setToast(msg);
     window.setTimeout(() => setToast(""), 2400);
   }, []);
 
-  const refreshStats = useCallback(async (): Promise<void> => {
-    try {
-      setStats(await getReservationStats());
-      setStatsError("");
-    } catch {
-      setStatsError("Stats unavailable — database may be unreachable.");
-    }
-  }, []);
-
   useEffect(() => {
-    void refreshStats();
-  }, [refreshStats]);
-
-  // Resume a reservation made in this browser.
-  useEffect(() => {
-    let token: string | null = null;
-    try {
-      token = sessionStorage.getItem(RESERVATION_SESSION_KEY);
-    } catch {
-      token = null;
-    }
-    if (token === null || token === "") return;
-    getReservation(token)
-      .then((r: Reservation | null) => {
-        if (r === null) return;
-        setSaved(r);
-        setXHandle(r.xHandle);
-        setTasks({ ...r.tasks });
-        setTaskAt(r.taskAt ?? { follow: 0, likeRepost: 0, comment: 0 });
-        setWallet(r.wallet);
-        setQuantity(r.quantity);
+    setMounted(true);
+    getMintStats()
+      .then((s: MintStats) => {
+        setStats(s);
+        setDbDown(false);
       })
-      .catch(() => {
-        /* ignore — stats error already covers DB issues */
-      });
+      .catch(() => setDbDown(true));
   }, []);
 
-  const handleValid: boolean = useMemo(() => XHANDLE_RE.test(xHandle.trim()), [xHandle]);
-  const tasksDone: boolean = tasks.follow && tasks.likeRepost && tasks.comment;
-  const doneCount: number = [tasks.follow, tasks.likeRepost, tasks.comment].filter(Boolean).length;
-  const walletValid: boolean = useMemo(() => BC1P_RE.test(wallet.trim()), [wallet]);
-  const soldOut: boolean = stats !== null && stats.soldOut;
-
-  const markOpened = (key: "follow" | "likeRepost" | "comment"): void => {
-    setOpened((o) => ({ ...o, [key]: true }));
-  };
-
-  const verifyTask = (key: "follow" | "likeRepost" | "comment"): void => {
-    if (!handleValid) {
-      showToast("Enter your X handle first");
-      return;
-    }
-    if (!opened[key]) {
-      showToast("Open the post first, then verify");
-      return;
-    }
-    const now = Date.now();
-    setTasks((t) => ({ ...t, [key]: true }));
-    setTaskAt((s) => ({ ...s, [key]: s[key] > 0 ? s[key] : now }));
-    showToast("Task verified ✓");
-  };
-
-  const resetTasks = (): void => {
-    setTasks({ follow: false, likeRepost: false, comment: false });
-    setTaskAt({ follow: 0, likeRepost: 0, comment: 0 });
-    setOpened({ follow: false, likeRepost: false, comment: false });
-  };
-
-  const copy = useCallback(
-    async (value: string, label: string): Promise<void> => {
-      try {
-        await navigator.clipboard.writeText(value);
-        showToast(`${label} copied`);
-      } catch {
-        showToast("Copy failed — select and copy manually");
-      }
+  useEffect(
+    () => () => {
+      Object.values(timers.current).forEach((t) => t && clearTimeout(t));
     },
-    [showToast]
+    []
   );
 
-  const submit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  // Server and first client render must match: DB stats load after mount.
+  const reserved = useMemo(
+    () =>
+      !mounted
+        ? SITE.alreadyReserved
+        : stats
+          ? SITE.alreadyReserved + stats.pieces
+          : totalReserved(),
+    [mounted, stats, tick]
+  );
+  const left = Math.max(0, SITE.totalSlots - reserved);
+  const soldOut = left <= 0;
+  const pct: number = Math.min(100, Math.round((reserved / SITE.totalSlots) * 100));
+
+  const handleOk = handleVerdict !== null && handleVerdict.ok;
+  const tasksDone = done.follow && done.like && done.rt && done.cmt;
+  const doneCount: number = (Object.keys(done) as TaskKey[]).filter((k) => done[k]).length;
+  const walletOk = validWallet(wallet);
+  const qtyOk =
+    Number.isInteger(qty) && qty >= 1 && qty <= SITE.maxPerWallet && qty <= left;
+
+  function confirm(key: TaskKey): void {
+    setDone((d) => ({ ...d, [key]: true }));
+    setPending((p) => ({ ...p, [key]: false }));
+    showToast("Task confirmed");
+  }
+
+  function locked(key: TaskKey): string | null {
+    if (key === "follow") return null;
+    if (!done.follow) return "Follow first";
+    if (key === "cmt" && (!done.like || !done.rt)) return "Like + repost first";
+    return null;
+  }
+
+  function doTask(key: TaskKey, url: string): void {
+    if (locked(key) !== null) return;
+    window.open(url, "_blank", "noopener");
+    openedAt.current[key] = Date.now();
+    if (done[key]) return;
+    setPending((p) => ({ ...p, [key]: true }));
+    if (timers.current[key]) clearTimeout(timers.current[key]);
+    timers.current[key] = setTimeout(() => confirm(key), AUTO_DELAY);
+  }
+
+  // Auto-confirm when the user returns to this tab after acting on X.
+  useEffect(() => {
+    function onReturn(): void {
+      if (document.visibilityState === "hidden") return;
+      (Object.keys(pending) as TaskKey[]).forEach((k) => {
+        if (pending[k] && !done[k] && Date.now() - openedAt.current[k] > RETURN_MIN) {
+          if (timers.current[k]) clearTimeout(timers.current[k]);
+          confirm(k);
+        }
+      });
+    }
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
+  });
+
+  async function verifyHandle(): Promise<void> {
+    if (!validHandle(handle) || checkingHandle) return;
+    setCheckingHandle(true);
+    setHandleVerdict(null);
+    try {
+      const r = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle }),
+      });
+      const j = await r.json();
+      if (j.mode === "verified" && j.exists === false) {
+        setHandleVerdict({
+          ok: false,
+          detail: "This X account was not found. Check spelling.",
+          api: true,
+        });
+        return;
+      }
+      if (j.mode === "verified" && j.exists === true) {
+        setHandleVerdict({ ok: true, detail: "X account found — tasks unlocked.", api: true });
+      } else {
+        setHandleVerdict({
+          ok: true,
+          detail: "Format OK — tasks unlocked. (Add X_BEARER_TOKEN for live existence checks.)",
+          api: false,
+        });
+      }
+      showToast("Handle verified");
+    } catch {
+      setHandleVerdict({
+        ok: true,
+        detail: "Format OK — tasks unlocked. (Server check skipped.)",
+        api: false,
+      });
+    } finally {
+      setCheckingHandle(false);
+    }
+  }
+
+  function goStep(n: number): void {
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function copy(value: string, label: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast(`${label} copied`);
+    } catch {
+      showToast("Copy failed — select and copy manually");
+    }
+  }
+
+  function refreshStats(): void {
+    getMintStats()
+      .then((s: MintStats) => {
+        setStats(s);
+        setDbDown(false);
+      })
+      .catch(() => setDbDown(true));
+  }
+
+  async function submit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setError("");
-    const handle = xHandle.trim();
-    const cleanWallet = wallet.trim();
-    if (!XHANDLE_RE.test(handle)) {
-      setError("Enter a valid X handle (1–15 chars, letters/numbers/_).");
+    const h = normHandle(handle);
+    const w = wallet.trim();
+    if (!validHandle(handle) || !handleOk) {
+      setError("Step 1: verify your X handle first.");
       return;
     }
     if (!tasksDone) {
-      setError("Complete all 3 X tasks first.");
+      setError(`Step 2: ${doneCount}/4 tasks confirmed — finish all 4 first.`);
       return;
     }
-    if (!BC1P_RE.test(cleanWallet)) {
-      setError("Enter a valid bc1p Taproot address.");
+    if (!walletOk) {
+      setError("Enter a valid wallet address (0x… or Solana).");
       return;
     }
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_PER_WALLET) {
-      setError(`Quantity must be 1–${MAX_PER_WALLET}.`);
+    if (!qtyOk) {
+      setError(`Quantity must be 1–${SITE.maxPerWallet} and fit the remaining supply.`);
       return;
     }
     if (soldOut) {
-      setError("Sold out — all 1,000 slots are taken.");
+      setError("Sold out — all 1,000 NFTs are taken.");
       return;
     }
+    const c = makeCode();
     setSubmitting(true);
     try {
-      const token = newToken();
-      const record: Reservation = {
-        token,
-        xHandle: normalizeDisplay(handle),
-        xHandleLower: handle.replace(/^@/, "").toLowerCase(),
-        wallet: cleanWallet,
-        quantity,
-        tasks: { ...tasks },
-        taskAt: { ...taskAt },
+      await createMintReservation({
+        code: c,
+        handle: h,
+        wallet: w,
+        qty,
+        tasks: { ...done },
+        handleVerified: handleVerdict?.api === true,
         createdAt: Date.now(),
-      };
-      const { token: returned } = await saveReservationAsync(record);
-      const finalRecord: Reservation = { ...record, token: returned };
-      setSaved(finalRecord);
-      try {
-        sessionStorage.setItem(RESERVATION_SESSION_KEY, returned);
-      } catch {
-        /* ignore */
-      }
-      showToast("Slots reserved ✓");
-      void refreshStats();
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save reservation");
-    } finally {
+      setError(err instanceof Error ? err.message : "Could not save reservation — retry.");
       setSubmitting(false);
+      return;
     }
-  };
-
-  const startOver = (): void => {
-    setSaved(null);
-    setXHandle("");
-    resetTasks();
-    setWallet("");
-    setQuantity(1);
-    setError("");
+    setSubmitting(false);
+    const record: Reservation = {
+      handle: h,
+      wallet: w,
+      qty,
+      code: c,
+      at: Date.now(),
+      handleVerified: handleVerdict?.api === true,
+    };
     try {
-      sessionStorage.removeItem(RESERVATION_SESSION_KEY);
+      saveReservation(record); // on-device mirror so claim lookup works offline
     } catch {
       /* ignore */
     }
-  };
+    setSaved(record);
+    setTick((t: number) => t + 1);
+    refreshStats();
+    showToast("NFTs reserved");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  const pct: number =
-    stats === null ? 0 : Math.min(100, Math.round((stats.pieces / SUPPLY_LIMIT) * 100));
+  function startOver(): void {
+    setSaved(null);
+    setStep(1);
+    setHandle("");
+    setHandleVerdict(null);
+    setDone({ follow: false, like: false, rt: false, cmt: false });
+    setPending({ follow: false, like: false, rt: false, cmt: false });
+    setWallet("");
+    setQty(1);
+    setError("");
+  }
 
   return (
     <Shell>
       <SiteHeader
-        tag="ALLOWLIST"
-        badge={
-          stats === null
-            ? statsError !== ""
-              ? "DB UNREACHABLE"
-              : "LOADING…"
-            : soldOut
-              ? "SOLD OUT"
-              : `${stats.remaining.toLocaleString("en-US")} SLOTS LEFT`
-        }
-        badgeTone={stats === null || soldOut || statsError !== "" ? "warn" : "ok"}
+        tag="NFT"
+        badge={soldOut ? "SOLD OUT" : `${left.toLocaleString("en-US")} LEFT`}
+        badgeTone={soldOut ? "warn" : "ok"}
         links={[
-          { href: "#handle", label: "1 · Handle" },
-          { href: "#tasks", label: "2 · Tasks" },
-          { href: "#reserve", label: "3 · Reserve" },
+          { href: "#top", label: "Mint" },
+          { href: "#progress", label: "Supply" },
+          { href: "#how", label: "How it works" },
         ]}
       />
 
-      <main>
+      <main id="top" className="ob-scroll-anchor">
         <section className="ob-hero">
           <span className="ob-kicker">
             <span aria-hidden="true" className="ob-kicker-bar" />
-            1,000-SLOT ALLOWLIST
+            1,000-SUPPLY ALLOWLIST
           </span>
           <h1 className="ob-title">
-            Claim your slot in <em>3 steps.</em>
+            Reserve your <em>Oblyx NFTs.</em>
           </h1>
           <p className="ob-lead">
-            Enter your X handle, finish 3 X tasks, then reserve up to {MAX_PER_WALLET} slots with
-            one Taproot wallet. One wallet = one reservation, max once.
+            Enter your X handle, finish 4 X tasks, then reserve up to {SITE.maxPerWallet}{" "}
+            NFTs with one wallet. One wallet = one reservation, max once.
           </p>
           <div className="ob-chips">
             <span className="ob-chip">
-              Supply: <b>{SUPPLY_LIMIT.toLocaleString("en-US")}</b>
+              Supply: <b>{SITE.totalSlots.toLocaleString("en-US")}</b>
             </span>
             <span className="ob-chip">
-              Max: <b>{MAX_PER_WALLET} / wallet</b>
+              Max: <b>{SITE.maxPerWallet} / wallet</b>
             </span>
             <span className="ob-chip">
-              Tasks: <b>{doneCount}/3</b>
+              Tasks: <b>{doneCount}/4</b>
             </span>
           </div>
         </section>
 
-        <section className="ob-panel" aria-label="Allowlist progress">
+        <section id="progress" className="ob-panel ob-scroll-anchor" aria-label="Allowlist progress">
           <div className="ob-panel-head">
-            <h2>Slots taken · out of {SUPPLY_LIMIT.toLocaleString("en-US")}</h2>
+            <h2>Reserved · out of {SITE.totalSlots.toLocaleString("en-US")}</h2>
             <span className="ob-panel-count">
-              <b>{stats === null ? "—" : stats.pieces.toLocaleString("en-US")}</b> /{" "}
-              {SUPPLY_LIMIT.toLocaleString("en-US")} taken
+              <b>{reserved.toLocaleString("en-US")}</b> / {SITE.totalSlots.toLocaleString("en-US")}{" "}
+              taken
             </span>
           </div>
-          <div className="ob-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div
+            className="ob-progress"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             <span className="ob-progress-fill" style={{ width: `${pct}%` }} />
           </div>
           <div className="ob-stats">
             {[
               { k: "RESERVATIONS", v: stats === null ? "—" : String(stats.count) },
-              { k: "SLOTS TAKEN", v: stats === null ? "—" : String(stats.pieces) },
-              { k: "REMAINING", v: stats === null ? "—" : String(stats.remaining) },
+              { k: "NFTS TAKEN", v: String(reserved) },
+              { k: "REMAINING", v: String(left) },
             ].map((s, i) => (
               <div key={s.k} className={cn("ob-stat", i === 2 && "ob-stat--wide")}>
                 <small>{s.k}</small>
@@ -300,7 +354,9 @@ export default function Home(): React.JSX.Element {
               </div>
             ))}
           </div>
-          {statsError !== "" && <p className="ob-alert">{statsError}</p>}
+          {dbDown && (
+            <p className="ob-alert">Database unreachable — showing this device&apos;s counts.</p>
+          )}
         </section>
 
         {saved !== null ? (
@@ -308,34 +364,39 @@ export default function Home(): React.JSX.Element {
             <div className="ob-card-head">
               <span className="ob-card-num">✓</span>
               <div>
-                <h2>Slots reserved</h2>
+                <h2>NFTs reserved</h2>
                 <p>
-                  {saved.xHandle} · {saved.quantity} slot{saved.quantity === 1 ? "" : "s"} · keep
-                  your recovery code safe.
+                  @{saved.handle}
+                  {saved.handleVerified ? " ✓" : ""} · {saved.qty} NFT
+                  {saved.qty === 1 ? "" : "s"} · keep your code safe.
                 </p>
               </div>
             </div>
             <dl className="ob-facts">
               <div className="ob-fact-row">
                 <dt>X HANDLE</dt>
-                <dd>{saved.xHandle}</dd>
+                <dd>@{saved.handle}</dd>
               </div>
               <div className="ob-fact-row">
                 <dt>WALLET</dt>
                 <dd>{saved.wallet}</dd>
               </div>
               <div className="ob-fact-row">
-                <dt>SLOTS</dt>
-                <dd className="ob-hl">×{saved.quantity}</dd>
+                <dt>NFTS</dt>
+                <dd className="ob-hl">×{saved.qty}</dd>
               </div>
             </dl>
             <div className="ob-codebox">
-              <span>RECOVERY CODE (PRIVATE — NEEDED TO LOOK UP YOUR SPOT)</span>
-              <code>{saved.token}</code>
+              <span>RESERVATION CODE (PRIVATE — NEEDED FOR CLAIM)</span>
+              <code>{saved.code}</code>
             </div>
             <div className="ob-form">
-              <button type="button" onClick={() => void copy(saved.token, "Recovery code")} className="ob-btn ob-btn--ghost">
-                Copy recovery code
+              <button
+                type="button"
+                onClick={() => void copy(saved.code, "Reservation code")}
+                className="ob-btn ob-btn--ghost"
+              >
+                Copy reservation code
               </button>
               <button type="button" onClick={startOver} className="ob-btn ob-btn--ghost">
                 Make another reservation →
@@ -347,171 +408,226 @@ export default function Home(): React.JSX.Element {
             </p>
           </section>
         ) : (
-          <form onSubmit={(e) => void submit(e)}>
-            {/* STEP 1 */}
-            <section id="handle" className="ob-card ob-scroll-anchor" aria-label="Step 1 — X handle">
-              <div className="ob-card-head">
-                <span className="ob-card-num">1</span>
-                <div>
-                  <h2>Your X handle</h2>
-                  <p>Start here — tasks unlock once your handle is valid.</p>
-                </div>
-              </div>
-              <div className="ob-form">
-                <FieldLabel htmlFor="ob-x-handle">X HANDLE</FieldLabel>
-                <TextInput
-                  id="ob-x-handle"
-                  value={xHandle}
-                  placeholder="@your_handle"
-                  onChange={(v: string) => setXHandle(v)}
-                />
-                <p className="ob-note">
-                  {xHandle.trim() === ""
-                    ? "1–15 chars: letters, numbers, _ — with or without @."
-                    : handleValid
-                      ? `Locked in as ${normalizeDisplay(xHandle)} — now do the tasks below.`
-                      : "That handle looks invalid — check spelling."}
-                </p>
-              </div>
-            </section>
+          <>
+            <p className="ob-msg">Step {step} of 3 — handle → tasks → wallet.</p>
 
-            {/* STEP 2 */}
-            <section id="tasks" className="ob-card ob-scroll-anchor" aria-label="Step 2 — X tasks">
-              <div className="ob-card-head">
-                <span className="ob-card-num">2</span>
-                <div>
-                  <h2>Do the 3 X tasks ({doneCount}/3)</h2>
-                  <p>Open each link, complete it, then hit Verify.</p>
+            {step === 1 && (
+              <section className="ob-card ob-scroll-anchor" aria-label="Step 1 — X handle">
+                <div className="ob-card-head">
+                  <span className="ob-card-num">1</span>
+                  <div>
+                    <h2>Your X handle</h2>
+                    <p>Start here — tasks unlock once your handle is verified.</p>
+                  </div>
                 </div>
-              </div>
-              <div className="ob-form">
-                <TaskRow
-                  step="2.1"
-                  title={`Follow ${FOLLOW_HANDLE}`}
-                  url={FOLLOW_URL}
-                  linkLabel="Open profile"
-                  locked={!handleValid}
-                  lockedHint="Enter your X handle first"
-                  done={tasks.follow}
-                  opened={opened.follow}
-                  onOpen={() => markOpened("follow")}
-                  onVerify={() => verifyTask("follow")}
-                />
-                <TaskRow
-                  step="2.2"
-                  title={LIKE_REPOST_LABEL}
-                  url={LIKE_REPOST_URL}
-                  linkLabel="Open post"
-                  locked={!handleValid || !tasks.follow}
-                  lockedHint={!handleValid ? "Enter your X handle first" : "Follow first"}
-                  done={tasks.likeRepost}
-                  opened={opened.likeRepost}
-                  onOpen={() => markOpened("likeRepost")}
-                  onVerify={() => verifyTask("likeRepost")}
-                />
-                <TaskRow
-                  step="2.3"
-                  title={COMMENT_LABEL}
-                  url={COMMENT_URL}
-                  linkLabel="Open post"
-                  locked={!handleValid || !tasks.likeRepost}
-                  lockedHint={!handleValid ? "Enter your X handle first" : "Like + repost first"}
-                  done={tasks.comment}
-                  opened={opened.comment}
-                  onOpen={() => markOpened("comment")}
-                  onVerify={() => verifyTask("comment")}
-                />
-                {doneCount > 0 && (
-                  <button type="button" onClick={resetTasks} className="ob-link-btn">
-                    Reset tasks
+                <div className="ob-form">
+                  <FieldLabel htmlFor="ob-x-handle">X HANDLE</FieldLabel>
+                  <TextInput
+                    id="ob-x-handle"
+                    value={handle}
+                    placeholder="@your_handle"
+                    onChange={(v: string) => {
+                      setHandle(v);
+                      setHandleVerdict(null);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void verifyHandle()}
+                    disabled={!validHandle(handle) || checkingHandle || soldOut}
+                    className="ob-btn"
+                  >
+                    {checkingHandle
+                      ? "Verifying…"
+                      : handleOk
+                        ? "Verified — continue →"
+                        : "Verify handle →"}
                   </button>
-                )}
-              </div>
-            </section>
-
-            {/* STEP 3 */}
-            <section id="reserve" className="ob-card ob-scroll-anchor" aria-label="Step 3 — Reserve slots">
-              <div className="ob-card-head">
-                <span className="ob-card-num">3</span>
-                <div>
-                  <h2>Wallet + slots</h2>
-                  <p>One wallet reserves once, max {MAX_PER_WALLET} slots.</p>
-                </div>
-              </div>
-              <div className="ob-form">
-                <FieldLabel htmlFor="ob-wallet">TAPROOT WALLET (BC1P)</FieldLabel>
-                <TextInput
-                  id="ob-wallet"
-                  value={wallet}
-                  placeholder="bc1p…"
-                  onChange={(v: string) => setWallet(v)}
-                />
-                <FieldLabel>SLOTS (MAX {MAX_PER_WALLET})</FieldLabel>
-                <div className="ob-seg" role="group" aria-label="Quantity">
-                  {Array.from({ length: MAX_PER_WALLET }, (_, i: number) => i + 1).map((n: number) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setQuantity(n)}
-                      aria-pressed={quantity === n}
-                      className={cn("ob-seg-btn", quantity === n && "ob-seg-btn--on")}
-                    >
-                      {n}
+                  <p className="ob-note">
+                    {handle.trim() === ""
+                      ? "1–15 chars: letters, numbers, _ — with or without @."
+                      : !validHandle(handle)
+                        ? "That handle looks invalid — check spelling."
+                        : handleVerdict !== null
+                          ? handleVerdict.detail
+                          : "Hit verify to unlock the tasks."}
+                  </p>
+                  {handleOk && (
+                    <button type="button" onClick={() => goStep(2)} className="ob-btn ob-btn--ghost">
+                      Continue to tasks →
                     </button>
-                  ))}
+                  )}
                 </div>
-                <p className="ob-note">
-                  {wallet.trim() === ""
-                    ? "Your bc1p address receives the allocation later — double-check it."
-                    : walletValid
-                      ? "Wallet looks valid."
-                      : "That doesn't look like a bc1p Taproot address."}
-                </p>
-                <button
-                  type="submit"
-                  disabled={submitting || soldOut || !handleValid || !tasksDone || !walletValid}
-                  className="ob-btn"
+              </section>
+            )}
+
+            {step === 2 && (
+              <section className="ob-card ob-scroll-anchor" aria-label="Step 2 — X tasks">
+                <div className="ob-card-head">
+                  <span className="ob-card-num">2</span>
+                  <div>
+                    <h2>Do the 4 X tasks ({doneCount}/4)</h2>
+                    <p>Open each link, do it on X, come back — auto-confirmed in order.</p>
+                  </div>
+                </div>
+                <div className="ob-form">
+                  <AutoTaskRow
+                    step="2.1"
+                    title={`Follow @${SITE.xAccount}`}
+                    url={SITE.xAccountUrl}
+                    linkLabel="Open profile"
+                    lockedMsg={locked("follow") !== null ? "Verify your X handle first" : null}
+                    done={done.follow}
+                    pending={pending.follow}
+                    onOpen={() => doTask("follow", SITE.xAccountUrl)}
+                  />
+                  {done.follow && (
+                    <AutoTaskRow
+                      step="2.2"
+                      title="Like the post"
+                      url={SITE.xPostUrl}
+                      linkLabel="Open post"
+                      lockedMsg={null}
+                      done={done.like}
+                      pending={pending.like}
+                      onOpen={() => doTask("like", SITE.xPostUrl)}
+                    />
+                  )}
+                  {done.like && (
+                    <AutoTaskRow
+                      step="2.3"
+                      title="Repost it"
+                      url={SITE.xPostUrl}
+                      linkLabel="Open post"
+                      lockedMsg={null}
+                      done={done.rt}
+                      pending={pending.rt}
+                      onOpen={() => doTask("rt", SITE.xPostUrl)}
+                    />
+                  )}
+                  {done.rt && (
+                    <AutoTaskRow
+                      step="2.4"
+                      title="Comment on the post"
+                      url={SITE.xPostUrl}
+                      linkLabel="Open post"
+                      lockedMsg={null}
+                      done={done.cmt}
+                      pending={pending.cmt}
+                      onOpen={() => doTask("cmt", SITE.xPostUrl)}
+                    />
+                  )}
+                  <button type="button" onClick={() => goStep(1)} className="ob-link-btn">
+                    ← Back to handle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goStep(3)}
+                    disabled={!tasksDone || soldOut}
+                    className="ob-btn"
+                  >
+                    Continue to wallet →
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {step === 3 && (
+              <section className="ob-card ob-scroll-anchor" aria-label="Step 3 — Reserve NFTs">
+                <div className="ob-card-head">
+                  <span className="ob-card-num">3</span>
+                  <div>
+                    <h2>Wallet + NFTs</h2>
+                    <p>
+                      One wallet reserves once, max {SITE.maxPerWallet} NFTs.
+                    </p>
+                  </div>
+                </div>
+                <form
+                  onSubmit={(e: React.FormEvent<HTMLFormElement>) => void submit(e)}
+                  className="ob-form"
                 >
-                  {soldOut
-                    ? "Sold out — all 1,000 slots taken"
-                    : submitting
-                      ? "Reserving…"
-                      : `Reserve ${quantity} slot${quantity === 1 ? "" : "s"} →`}
-                </button>
-              </div>
-              <FormMessage
-                tone={error !== "" ? "error" : ""}
-                text={
-                  error !== ""
-                    ? error
-                    : soldOut
-                      ? "Sold out — all 1,000 slots are taken."
-                      : !handleValid
-                        ? "Step 1: enter your X handle."
-                        : !tasksDone
-                          ? `Step 2: ${doneCount}/3 tasks verified — finish all 3 to unlock reserving.`
-                          : "All checks green — hit reserve."
-                }
-              />
-              {!soldOut && stats !== null && stats.remaining < quantity && (
-                <p className="ob-warnbox">
-                  Only {stats.remaining} slot{stats.remaining === 1 ? "" : "s"} left — lower your
-                  quantity to fit.
-                </p>
-              )}
-            </section>
-          </form>
+                  <FieldLabel htmlFor="ob-wallet">WALLET (RECEIVES YOUR NFTS)</FieldLabel>
+                  <TextInput
+                    id="ob-wallet"
+                    value={wallet}
+                    placeholder="0x… or Solana address"
+                    onChange={(v: string) => {
+                      setWallet(v);
+                      setError("");
+                    }}
+                  />
+                  <FieldLabel>NFTS (MAX {SITE.maxPerWallet})</FieldLabel>
+                  <div className="ob-seg" role="group" aria-label="Quantity">
+                    {Array.from({ length: SITE.maxPerWallet }, (_, i: number) => i + 1).map(
+                      (n: number) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setQty(n)}
+                          aria-pressed={qty === n}
+                          className={cn("ob-seg-btn", qty === n && "ob-seg-btn--on")}
+                        >
+                          {n}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <p className="ob-note">
+                    {wallet.trim() === ""
+                      ? "Double-check it — the wallet can't be changed after reserving."
+                      : walletOk
+                        ? "Wallet looks valid."
+                        : "That doesn't look like a valid wallet address."}
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={submitting || soldOut || !handleOk || !tasksDone || !walletOk || !qtyOk}
+                    className="ob-btn"
+                  >
+                    {soldOut
+                      ? "Sold out — all 1,000 taken"
+                      : submitting
+                        ? "Reserving…"
+                        : `Reserve ${qty} NFT${qty === 1 ? "" : "s"} →`}
+                  </button>
+                  <button type="button" onClick={() => goStep(2)} className="ob-link-btn">
+                    ← Back to tasks
+                  </button>
+                </form>
+                <FormMessage
+                  tone={error !== "" ? "error" : ""}
+                  text={
+                    error !== ""
+                      ? error
+                      : soldOut
+                        ? "Sold out — all 1,000 NFTs are taken."
+                        : !handleOk
+                          ? "Step 1: verify your X handle."
+                          : !tasksDone
+                            ? `Step 2: ${doneCount}/4 tasks confirmed — finish all 4 to unlock reserving.`
+                            : "All checks green — hit reserve."
+                  }
+                />
+                {!soldOut && left < qty && (
+                  <p className="ob-warnbox">Only {left} left — lower your quantity to fit.</p>
+                )}
+              </section>
+            )}
+          </>
         )}
 
-        <ol className="ob-steps" aria-label="How it works">
+        <ol id="how" className="ob-steps ob-scroll-anchor" aria-label="How it works">
           {[
             { h: "Handle first", p: "One X handle = one reservation. Handles can't be reused." },
-            { h: "Prove you're real", p: "Follow, like + repost, comment — verified in order." },
-            { h: "One wallet, once", p: `A wallet can reserve a single time, max ${MAX_PER_WALLET} slots.` },
-            { h: "1,000 cap", p: "When all 1,000 slots are gone, reserving closes automatically." },
+            { h: "Prove you're real", p: "Follow, like + repost, comment — auto-confirmed in order." },
+            { h: "One wallet, once", p: `A wallet can reserve a single time, max ${SITE.maxPerWallet} NFTs.` },
+            { h: "1,000 cap", p: "When all 1,000 are gone, reserving closes automatically." },
           ].map((s, i) => (
             <li key={s.h} className="ob-step">
-              <span aria-hidden="true" className="ob-step-num">{i + 1}</span>
+              <span aria-hidden="true" className="ob-step-num">
+                {i + 1}
+              </span>
               <h3>{s.h}</h3>
               <p>{s.p}</p>
             </li>
@@ -519,8 +635,8 @@ export default function Home(): React.JSX.Element {
         </ol>
 
         <p className="ob-foot">
-          The /claim page stays hidden. Task checks are guided (open → verify), not X-API
-          checked — edit links in lib/quest.ts.
+          The /claim page stays hidden. Task checks are guided (open → auto-confirm), not
+          X-API checked — full proof needs Login with X + paid API reads.
         </p>
       </main>
 
@@ -529,48 +645,46 @@ export default function Home(): React.JSX.Element {
   );
 }
 
-type TaskRowProps = Readonly<{
+type AutoTaskRowProps = Readonly<{
   step: string;
   title: string;
   url: string;
   linkLabel: string;
-  locked: boolean;
-  lockedHint: string;
+  lockedMsg: string | null;
   done: boolean;
-  opened: boolean;
+  pending: boolean;
   onOpen: () => void;
-  onVerify: () => void;
 }>;
 
-function TaskRow({
+function AutoTaskRow({
   step,
   title,
   url,
   linkLabel,
-  locked,
-  lockedHint,
+  lockedMsg,
   done,
-  opened,
+  pending,
   onOpen,
-  onVerify,
-}: TaskRowProps): React.JSX.Element {
+}: AutoTaskRowProps): React.JSX.Element {
   return (
-    <div className={cn("ob-task", locked && "ob-task--locked")}>
+    <div className={cn("ob-task", lockedMsg !== null && "ob-task--locked")}>
       <input type="checkbox" checked={done} readOnly tabIndex={-1} aria-label={`${title} done`} />
       <div className="ob-task-body">
         <strong>
           <span className="ob-task-step">{step} · </span>
-          {title} {done && <span className="ob-stamp">✓ verified</span>}
+          {title} {done && <span className="ob-stamp">✓ auto-confirmed</span>}
         </strong>
-        {!done && locked && <span className="ob-stamp ob-stamp--idle">{lockedHint}</span>}
-        {!done && !locked && !opened && (
-          <span className="ob-stamp ob-stamp--idle">1) open → 2) do it → 3) verify</span>
+        {!done && lockedMsg !== null && (
+          <span className="ob-stamp ob-stamp--idle">{lockedMsg}</span>
         )}
-        {!done && !locked && opened && (
-          <span className="ob-stamp">Opened ✓ — do it on X, then verify</span>
+        {!done && lockedMsg === null && !pending && (
+          <span className="ob-stamp ob-stamp--idle">1) open → 2) do it → 3) come back</span>
+        )}
+        {!done && lockedMsg === null && pending && (
+          <span className="ob-stamp">Opened — do it on X, come back here</span>
         )}
         <div className="ob-task-actions">
-          {locked ? (
+          {lockedMsg !== null ? (
             <span className="ob-open-btn ob-open-btn--disabled">{linkLabel} ↗</span>
           ) : (
             <a
@@ -580,18 +694,8 @@ function TaskRow({
               onClick={onOpen}
               className="ob-open-btn"
             >
-              {linkLabel} ↗
+              {done ? "Open again ↗" : `${linkLabel} ↗`}
             </a>
-          )}
-          {!done && (
-            <button
-              type="button"
-              disabled={locked || !opened}
-              onClick={onVerify}
-              className="ob-verify-btn"
-            >
-              Verify ✓
-            </button>
           )}
         </div>
       </div>
