@@ -2,9 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Oblyx NFT — Reserve Your Mints",
+  title: "Oblyx NFT",
   description:
     "Join the 1,000-supply allowlist. Enter your X handle, finish X tasks, reserve up to 4 NFTs.",
+  icons: {
+    icon: "/icon.jpg",
+  },
 };
 
 export const viewport: Viewport = {
