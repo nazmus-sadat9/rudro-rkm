@@ -7,9 +7,9 @@ export const SITE = {
   // The DB is now the source of truth — keep 0 unless migrating.
   alreadyReserved: 0,
   maxPerWallet: 4,
-  xAccount: "CaptainGzb",
-  xAccountUrl: "https://x.com/CaptainGzb",
-  xPostUrl: "https://x.com/CaptainGzb/status/2051156971357896964",
+  xAccount: "rudro_rkm",
+  xAccountUrl: "https://x.com/rudro_rkm",
+  xPostUrl: "https://x.com/rudro_rkm/status/",
 } as const;
 
 export type Reservation = {
