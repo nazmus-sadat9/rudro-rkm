@@ -13,7 +13,7 @@ export function Shell({ children }: ShellProps): React.JSX.Element {
 
 type BrandProps = Readonly<{ tag: string; href?: string }>;
 
-export function Brand({ tag, href = "/claim" }: BrandProps): React.JSX.Element {
+export function Brand({ tag, href = "/" }: BrandProps): React.JSX.Element {
   return (
     <a href={href} className="ob-brand" aria-label="Oblyx home">
       <span aria-hidden="true" className="ob-orb">

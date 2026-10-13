@@ -1,3 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@theme {
+  --color-base: #0e1219;
+  --color-card: #151b25;
+  --color-card2: #10151e;
+  --color-deep: #0b0f16;
+  --color-line: #263041;
+  --color-ink: #e9edf4;
+  --color-mut: #9aa5b8;
+  --color-faint: #687183;
+  --color-brand: #5b8cff;
+  --color-brand-deep: #3b6fe0;
+  --color-brand-ink: #dbe7ff;
+  --color-ok: #4ad69b;
+  --color-warn: #f2b84e;
+  --color-bad: #f08a80;
+
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
+}
+
 /* Oblyx — vanilla stylesheet (mobile-first). Base styles target phones;
    larger screens are enhanced with min-width media queries. */
 
@@ -1648,4 +1673,143 @@ table.ob-dtable {
 
 .ob-scroll-anchor {
   scroll-margin-top: 16px;
+}
+
+/* ---------- quest tasks ---------- */
+
+.ob-task {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--deep);
+  padding: 13px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.ob-task:hover {
+  border-color: rgba(91, 140, 255, 0.6);
+}
+
+.ob-task input[type="checkbox"] {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.ob-task-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ob-task-body strong {
+  font-size: 13.5px;
+  overflow-wrap: break-word;
+}
+
+.ob-task-body a {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--brand);
+  overflow-wrap: break-word;
+}
+
+.ob-task-body a:hover {
+  text-decoration: underline;
+}
+
+.ob-stamp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ok);
+}
+
+.ob-stamp--idle {
+  color: var(--faint);
+}
+
+.ob-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ob-open-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card2);
+  padding: 0 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--brand-ink);
+}
+
+.ob-open-btn:hover {
+  border-color: var(--brand);
+  text-decoration: none;
+}
+
+.ob-verify-btn {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--brand-deep);
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+}
+
+.ob-verify-btn:hover:not(:disabled) {
+  background: var(--brand);
+}
+
+.ob-verify-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ob-reset-btn {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+  cursor: pointer;
+}
+
+.ob-reset-btn:hover {
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+
+.ob-task--locked {
+  opacity: 0.65;
+}
+
+.ob-task-step {
+  font-family: var(--font-mono);
+  color: var(--brand);
+}
+
+.ob-open-btn--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--faint);
 }

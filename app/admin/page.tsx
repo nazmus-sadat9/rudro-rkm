@@ -1,24 +1,12 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  clearOrdersAdmin,
-  listOrdersAdmin,
-  removeOrderAdmin,
-  saveOrderAdmin,
-  type MintOrder,
-} from "@/lib/orders";
-import { Shell, SiteHeader, TextInput, Toast, cn } from "@/components/ui";
+import { SITE } from "@/lib/config";
+import { listMintsAdmin, removeMintAdmin, type MintRow } from "@/lib/store";
+import { FieldLabel, Shell, SiteHeader, TextInput, Toast, cn } from "@/components/ui";
 
 /** Session key for the admin code (sent as x-admin-code, checked against server ADMIN_CODE). */
-const ADMIN_SESSION_KEY = "qm-admin-code";
-
-interface DashboardStats {
-  orders: number;
-  pieces: number;
-  verified: number;
-  pending: number;
-}
+const ADMIN_SESSION_KEY = "oblyx-admin-code";
 
 function short(v: string, head = 10, tail = 8): string {
   if (v.length <= head + tail + 3) return v;
@@ -38,11 +26,11 @@ export default function AdminPage(): React.JSX.Element {
   const [code, setCode] = useState<string>("");
   const [gateError, setGateError] = useState<string>("");
   const [unlocking, setUnlocking] = useState<boolean>(false);
-  const [orders, setOrders] = useState<MintOrder[]>([]);
+  const [orders, setOrders] = useState<MintRow[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string>("");
   const [toast, setToast] = useState<string>("");
-  const [deleteTarget, setDeleteTarget] = useState<MintOrder | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MintRow | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,9 +54,9 @@ export default function AdminPage(): React.JSX.Element {
       setLoading(true);
       setLoadError("");
       try {
-        setOrders(await listOrdersAdmin(key));
+        setOrders(await listMintsAdmin(key));
       } catch {
-        setLoadError("Could not load orders — wrong code or database unavailable.");
+        setLoadError("Could not load reservations — wrong code or database unavailable.");
         setOrders([]);
       } finally {
         setLoading(false);
@@ -93,20 +81,16 @@ export default function AdminPage(): React.JSX.Element {
     [showToast]
   );
 
-  const toggleRow = (e: React.MouseEvent<HTMLElement>, token: string): void => {
+  const toggleRow = (e: React.MouseEvent<HTMLElement>, key: string): void => {
     if ((e.target as HTMLElement).closest("button") !== null) return;
-    setExpanded((cur: string | null) => (cur === token ? null : token));
+    setExpanded((cur: string | null) => (cur === key ? null : key));
   };
 
-  const stats: DashboardStats = useMemo(() => {
-    const verified: MintOrder[] = orders.filter((o: MintOrder) => o.status === "verified");
-    return {
-      orders: orders.length,
-      pieces: orders.reduce((n: number, o: MintOrder) => n + o.quantity, 0),
-      verified: verified.length,
-      pending: orders.length - verified.length,
-    };
-  }, [orders]);
+  const pieces: number = useMemo(
+    () => orders.reduce((n: number, o: MintRow) => n + o.qty, 0),
+    [orders]
+  );
+  const remaining: number = Math.max(0, SITE.totalSlots - SITE.alreadyReserved - pieces);
 
   const unlock = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
@@ -117,8 +101,8 @@ export default function AdminPage(): React.JSX.Element {
     }
     setUnlocking(true);
     setGateError("");
-    listOrdersAdmin(v)
-      .then((list: MintOrder[]) => {
+    listMintsAdmin(v)
+      .then((list: MintRow[]) => {
         setAdminCode(v);
         setOrders(list);
         try {
@@ -135,33 +119,21 @@ export default function AdminPage(): React.JSX.Element {
       });
   };
 
-  const toggleStatus = (o: MintOrder): void => {
-    if (adminCode === null) return;
-    const next: MintOrder = {
-      ...o,
-      status: o.status === "verified" ? "awaiting_payment" : "verified",
-    };
-    saveOrderAdmin(next, adminCode)
-      .then(() => refresh())
-      .catch(() => showToast("Could not update order"));
-  };
-
   const confirmDelete = useCallback((): void => {
     if (deleteTarget === null || adminCode === null) return;
-    removeOrderAdmin(deleteTarget.token, adminCode)
+    removeMintAdmin(deleteTarget.code, adminCode)
       .then(() => {
         setDeleteTarget(null);
-        showToast("Order removed");
+        showToast("Reservation removed");
         return refresh();
       })
-      .catch(() => showToast("Could not delete order"));
+      .catch(() => showToast("Could not delete reservation"));
   }, [deleteTarget, adminCode, refresh, showToast]);
 
   const cancelDelete = useCallback((): void => {
     setDeleteTarget(null);
   }, []);
 
-  // Close the warning popup with Escape + lock background scroll while open.
   useEffect(() => {
     if (deleteTarget === null) return;
     const onKey = (e: KeyboardEvent): void => {
@@ -178,16 +150,16 @@ export default function AdminPage(): React.JSX.Element {
 
   const exportCsv = (): void => {
     const rows: string[] = [
-      ["token", "address", "quantity", "amountSats", "recipient", "status", "txid", "createdAt"].join(","),
-      ...orders.map((o: MintOrder) =>
-        [o.token, o.address, o.quantity, o.amountSats, o.recipient, o.status, o.txid, o.createdAt].join(",")
+      ["code", "handle", "wallet", "qty", "handleVerified", "createdAt"].join(","),
+      ...orders.map((o: MintRow) =>
+        [o.code, o.handle, o.wallet, o.qty, o.handleVerified, o.createdAt].join(",")
       ),
     ];
     const blob = new Blob([rows.join("\n")], { type: "text/csv" });
     const url: string = URL.createObjectURL(blob);
     const a: HTMLAnchorElement = document.createElement("a");
     a.href = url;
-    a.download = "claims.csv";
+    a.download = "oblyx-mints.csv";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -199,21 +171,21 @@ export default function AdminPage(): React.JSX.Element {
           tag="ADMIN"
           badge="LOCKED"
           badgeTone="warn"
-          links={[{ href: "/claim", label: "← Claim page" }]}
+          links={[{ href: "/", label: "← Home" }]}
         />
         <main className="ob-narrow">
           <section className="ob-card ob-card--flat">
             <div className="ob-card-head">
-              <span className="ob-card-num">✦</span>
+              <span className="ob-card-num">O</span>
               <div>
                 <h2>Admin access</h2>
-                <p>Enter the server admin code to view orders.</p>
+                <p>Enter the server admin code to view reservations.</p>
               </div>
             </div>
             <form onSubmit={unlock} className="ob-form">
-              <span className="ob-label">ACCESS CODE</span>
+              <FieldLabel htmlFor="ob-admin-code">ACCESS CODE</FieldLabel>
               <TextInput
-                id="qm-admin-code"
+                id="ob-admin-code"
                 value={code}
                 placeholder="Enter admin code"
                 onChange={(v: string) => {
@@ -226,9 +198,7 @@ export default function AdminPage(): React.JSX.Element {
               </button>
             </form>
             <p className={cn("ob-msg", gateError !== "" && "ob-msg--error")}>
-              {gateError !== ""
-                ? gateError
-                : "The code is checked against the server (ADMIN_CODE)."}
+              {gateError !== "" ? gateError : "The code is checked against the server (ADMIN_CODE)."}
             </p>
           </section>
         </main>
@@ -243,7 +213,7 @@ export default function AdminPage(): React.JSX.Element {
         tag="ADMIN"
         badge={loadError !== "" ? "DB UNREACHABLE" : "DB CONNECTED"}
         badgeTone={loadError !== "" ? "warn" : "ok"}
-        links={[{ href: "/claim", label: "← Claim page" }]}
+        links={[{ href: "/", label: "← Home" }]}
       />
 
       <main>
@@ -253,25 +223,27 @@ export default function AdminPage(): React.JSX.Element {
             DASHBOARD
           </span>
           <h1 className="ob-title">
-            Every claim, <em>one table.</em>
+            Every reservation, <em>one table.</em>
           </h1>
           <p className="ob-lead">
-            Review incoming claims, flip their status, and export for reconciliation.
+            Review X handles and wallets. One wallet = one reservation, max {SITE.maxPerWallet}{" "}
+            NFTs, {SITE.totalSlots.toLocaleString("en-US")} total.
           </p>
         </section>
 
         <section className="ob-panel">
           <div className="ob-panel-head">
-            <h2>Overview · out of 1,000</h2>
+            <h2>Overview · out of {SITE.totalSlots.toLocaleString("en-US")}</h2>
             <span className="ob-panel-count">
-              <b>{stats.pieces.toLocaleString("en-US")}</b> / 1,000 pieces requested
+              <b>{pieces.toLocaleString("en-US")}</b> / {SITE.totalSlots.toLocaleString("en-US")}{" "}
+              taken
             </span>
           </div>
           <div className="ob-stats">
             {[
-              { k: "ORDERS", v: String(stats.orders) },
-              { k: "VERIFIED", v: String(stats.verified) },
-              { k: "PENDING", v: String(stats.pending) },
+              { k: "RESERVATIONS", v: String(orders.length) },
+              { k: "NFTS TAKEN", v: String(pieces) },
+              { k: "REMAINING", v: String(remaining) },
             ].map((s, i) => (
               <div key={s.k} className={cn("ob-stat", i === 2 && "ob-stat--wide")}>
                 <small>{s.k}</small>
@@ -288,7 +260,7 @@ export default function AdminPage(): React.JSX.Element {
             disabled={loading}
             className="ob-tool-btn"
           >
-            {loading ? "↻ Loading…" : "↻ Refresh"}
+            {loading ? "Loading…" : "Refresh"}
           </button>
           <button
             type="button"
@@ -296,23 +268,7 @@ export default function AdminPage(): React.JSX.Element {
             disabled={orders.length === 0}
             className="ob-tool-btn"
           >
-            ↓ Export CSV
-          </button>
-          <button
-            type="button"
-            disabled={orders.length === 0 || adminCode === null}
-            onClick={() => {
-              if (adminCode === null) return;
-              clearOrdersAdmin(adminCode)
-                .then(() => {
-                  showToast("All orders cleared");
-                  return refresh();
-                })
-                .catch(() => showToast("Could not clear orders"));
-            }}
-            className="ob-tool-btn"
-          >
-            Clear all
+            Export CSV
           </button>
         </div>
 
@@ -320,37 +276,33 @@ export default function AdminPage(): React.JSX.Element {
 
         {orders.length === 0 ? (
           <div className="ob-empty">
-            No claims yet. Submit one on the claim page and it will show up here.
+            No reservations yet. Submit one on the home page and it will show up here.
           </div>
         ) : (
           <>
-            {/* Mobile: stacked cards — no horizontal scroll, no clipped columns */}
             <div className="ob-cards">
-              {orders.map((o: MintOrder) => (
-                <article
-                  key={o.token}
-                  onClick={(e: React.MouseEvent<HTMLElement>) => toggleRow(e, o.token)}
-                  className="ob-order-card"
-                >
-                  <div className="ob-order-top">
+              {orders.map((o: MintRow) => (
+                <article key={o.code} className="ob-order-card">
+                  <div
+                    className="ob-order-top"
+                    onClick={(e: React.MouseEvent<HTMLElement>) => toggleRow(e, o.code)}
+                  >
                     <p className="ob-order-addr">
-                      {expanded === o.token ? "▾ " : "▸ "}
-                      {short(o.address)}
+                      {expanded === o.code ? "▾ " : "▸ "}
+                      {o.handle} · {short(o.wallet)}
                     </p>
-                    <span className={cn("ob-pill", o.status === "verified" ? "ob-pill--ok" : "ob-pill--await")}>
-                      {o.status === "verified" ? "VERIFIED" : "AWAITING"}
-                    </span>
+                    <span className="ob-pill ob-pill--ok">×{o.qty}</span>
                   </div>
                   <p className="ob-order-sub">
-                    QTY {o.quantity} · {age(o.createdAt)} · {o.amountSats.toLocaleString("en-US")} sats
+                    {age(o.createdAt)} · {o.handleVerified ? "handle API-checked" : "handle format-only"}
                   </p>
                   <div className="ob-order-actions">
                     <button
                       type="button"
-                      onClick={() => toggleStatus(o)}
-                      className="ob-mini ob-mini--verify"
+                      onClick={() => void copy(o.wallet, "Wallet")}
+                      className="ob-mini"
                     >
-                      {o.status === "verified" ? "Reopen" : "Verify"}
+                      Copy wallet
                     </button>
                     <button
                       type="button"
@@ -360,27 +312,20 @@ export default function AdminPage(): React.JSX.Element {
                       Delete
                     </button>
                   </div>
-                  {expanded === o.token && (
+                  {expanded === o.code && (
                     <div className="ob-detail">
+                      <DetailRow label="X HANDLE" value={o.handle} />
                       <DetailRow
-                        label="FULL ADDRESS"
-                        value={o.address}
-                        onCopy={() => void copy(o.address, "Address")}
+                        label="WALLET"
+                        value={o.wallet}
+                        onCopy={() => void copy(o.wallet, "Wallet")}
                       />
-                      <DetailRow
-                        label="FEE"
-                        value={`${o.amountSats.toLocaleString("en-US")} sats`}
-                      />
-                      <DetailRow
-                        label="TX HASH"
-                        value={o.txid !== "" ? o.txid : "—"}
-                        onCopy={o.txid !== "" ? () => void copy(o.txid, "Tx hash") : undefined}
-                      />
+                      <DetailRow label="NFTS" value={String(o.qty)} />
                       <DetailRow label="AGE" value={age(o.createdAt)} />
                       <DetailRow
-                        label="RECOVERY CODE"
-                        value={o.token}
-                        onCopy={() => void copy(o.token, "Recovery code")}
+                        label="RESERVATION CODE"
+                        value={o.code}
+                        onCopy={() => void copy(o.code, "Reservation code")}
                       />
                     </div>
                   )}
@@ -388,51 +333,38 @@ export default function AdminPage(): React.JSX.Element {
               ))}
             </div>
 
-            {/* Desktop: full table */}
             <div className="ob-dtable-wrap">
               <table className="ob-dtable">
                 <thead>
                   <tr>
-                    {["DELIVERY ADDRESS", "QTY", "FEE (SATS)", "STATUS", "TX HASH", "AGE", ""].map(
-                      (h: string) => (
-                        <th key={h}>{h}</th>
-                      )
-                    )}
+                    {["X HANDLE", "WALLET", "QTY", "CHECK", "AGE", ""].map((h: string) => (
+                      <th key={h}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((o: MintOrder) => (
-                    <Fragment key={o.token}>
+                  {orders.map((o: MintRow) => (
+                    <Fragment key={o.code}>
                       <tr
-                        onClick={(e: React.MouseEvent<HTMLTableRowElement>) => toggleRow(e, o.token)}
+                        onClick={(e: React.MouseEvent<HTMLTableRowElement>) => toggleRow(e, o.code)}
                         title="Click to expand details"
                         className="ob-row"
                       >
-                        <td className="ob-mono" title={o.address}>
-                          {expanded === o.token ? "▾ " : "▸ "}
-                          {short(o.address)}
+                        <td className="ob-mono">{o.handle}</td>
+                        <td className="ob-mono" title={o.wallet}>
+                          {short(o.wallet)}
                         </td>
-                        <td className="ob-nowrap">{o.quantity}</td>
-                        <td className="ob-mono ob-nowrap">
-                          {o.amountSats.toLocaleString("en-US")}
-                        </td>
-                        <td className="ob-nowrap">
-                          <span className={cn("ob-pill", o.status === "verified" ? "ob-pill--ok" : "ob-pill--await")}>
-                            {o.status === "verified" ? "VERIFIED" : "AWAITING"}
-                          </span>
-                        </td>
-                        <td className="ob-mono ob-nowrap" title={o.txid}>
-                          {o.txid !== "" ? short(o.txid, 8, 6) : "—"}
-                        </td>
+                        <td className="ob-nowrap">{o.qty}</td>
+                        <td className="ob-mono ob-nowrap">{o.handleVerified ? "✓ api" : "· fmt"}</td>
                         <td className="ob-mono ob-nowrap">{age(o.createdAt)}</td>
                         <td className="ob-nowrap">
                           <div className="ob-row-btns">
                             <button
                               type="button"
-                              onClick={() => toggleStatus(o)}
-                              className="ob-mini ob-mini--verify"
+                              onClick={() => void copy(o.wallet, "Wallet")}
+                              className="ob-mini"
                             >
-                              {o.status === "verified" ? "Reopen" : "Verify"}
+                              Copy
                             </button>
                             <button
                               type="button"
@@ -444,29 +376,20 @@ export default function AdminPage(): React.JSX.Element {
                           </div>
                         </td>
                       </tr>
-                      {expanded === o.token && (
-                        <tr key={`${o.token}-detail`} className="ob-detail-row">
-                          <td colSpan={7}>
+                      {expanded === o.code && (
+                        <tr key={`${o.code}-detail`} className="ob-detail-row">
+                          <td colSpan={6}>
                             <div className="ob-detail">
                               <DetailRow
-                                label="FULL ADDRESS"
-                                value={o.address}
-                                onCopy={() => void copy(o.address, "Address")}
-                              />
-                              <DetailRow
-                                label="FEE"
-                                value={`${o.amountSats.toLocaleString("en-US")} sats`}
-                              />
-                              <DetailRow
-                                label="TX HASH"
-                                value={o.txid !== "" ? o.txid : "—"}
-                                onCopy={o.txid !== "" ? () => void copy(o.txid, "Tx hash") : undefined}
+                                label="FULL WALLET"
+                                value={o.wallet}
+                                onCopy={() => void copy(o.wallet, "Wallet")}
                               />
                               <DetailRow label="AGE" value={age(o.createdAt)} />
                               <DetailRow
-                                label="RECOVERY CODE"
-                                value={o.token}
-                                onCopy={() => void copy(o.token, "Recovery code")}
+                                label="RESERVATION CODE"
+                                value={o.code}
+                                onCopy={() => void copy(o.code, "Reservation code")}
                               />
                             </div>
                           </td>
@@ -483,11 +406,10 @@ export default function AdminPage(): React.JSX.Element {
         <div className="ob-db">
           <span aria-hidden="true">◈</span>
           <div>
-            <b>Database status: connected (MongoDB via /api/orders).</b>
+            <b>Database status: connected (MongoDB via /api/mints, mint_reservations).</b>
             <br />
-            Orders are stored in the shared database. Make sure{" "}
-            <code>MONGODB_URI</code> and <code>ADMIN_CODE</code> are set in the
-            hosting environment.
+            The old bc1p allowlist flow is retired. Make sure <code>MONGODB_URI</code> and{" "}
+            <code>ADMIN_CODE</code> are set in the hosting environment.
           </div>
         </div>
       </main>
@@ -506,7 +428,7 @@ export default function AdminPage(): React.JSX.Element {
 }
 
 type DeleteConfirmDialogProps = Readonly<{
-  order: MintOrder;
+  order: MintRow;
   onCancel: () => void;
   onConfirm: () => void;
 }>;
@@ -516,8 +438,8 @@ function DeleteConfirmDialog({ order, onCancel, onConfirm }: DeleteConfirmDialog
     <div
       role="alertdialog"
       aria-modal="true"
-      aria-labelledby="qm-delete-title"
-      aria-describedby="qm-delete-desc"
+      aria-labelledby="ob-delete-title"
+      aria-describedby="ob-delete-desc"
       className="ob-dialog"
     >
       <button
@@ -529,13 +451,13 @@ function DeleteConfirmDialog({ order, onCancel, onConfirm }: DeleteConfirmDialog
       <div className="ob-dialog-box">
         <div className="ob-dialog-top">
           <span aria-hidden="true" className="ob-dialog-icon">
-            ⚠
+            !
           </span>
           <div>
-            <h2 id="qm-delete-title">Delete this claim?</h2>
-            <p id="qm-delete-desc">
-              This permanently removes the order for <span>{short(order.address)}</span>{" "}
-              (qty {order.quantity}). This can&apos;t be undone.
+            <h2 id="ob-delete-title">Delete this reservation?</h2>
+            <p id="ob-delete-desc">
+              This permanently removes the reservation for <span>{order.handle}</span> (×
+              {order.qty}). This can&apos;t be undone.
             </p>
           </div>
         </div>
