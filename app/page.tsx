@@ -204,9 +204,9 @@ export default function Home() {
 
   const nextLabel =
     step === 1 ? (checkingHandle ? "Verifying…" : "Verify & continue →")
-    : step === 2 ? "Continue to wallet →"
-    : step === 3 ? (submitting ? "Reserving…" : `Reserve ${qty} NFT${qty > 1 ? "s" : ""}`)
-    : "Done";
+      : step === 2 ? "Continue to wallet →"
+        : step === 3 ? (submitting ? "Reserving…" : `Reserve ${qty} NFT${qty > 1 ? "s" : ""}`)
+          : "Done";
 
   function taskBtn(key: TaskKey, label: string) {
     if (done[key]) return { text: "Next →", cls: "btn btn-p" };
@@ -254,10 +254,10 @@ export default function Home() {
     <>
       <header className="nav">
         <div className="nav-in">
-          <div className="badge-x">𝕏</div>
+          <div className="badge-x">X</div>
           <div className="brand">
             <b>{SITE.projectName}</b>
-            <span>{SITE.tokenSymbol} • X Promo</span>
+            <span>{SITE.tokenSymbol} • X</span>
           </div>
           <div className="left-pill">● {left} left</div>
         </div>
@@ -379,7 +379,7 @@ export default function Home() {
           </section>
         )}
 
-        <footer>© 2026 {SITE.projectName} • 1 wallet = 1 reservation • DYOR</footer>
+        <footer>&copy; 2026 {SITE.projectName} • 1 wallet = 1 reservation</footer>
       </div>
 
       {step !== 4 && (
