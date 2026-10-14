@@ -12,8 +12,7 @@ import styles from "./coming-soon.module.css";
 
 export default function ClaimPage() {
   return (
-    <div>
-
+    <>
       <main className={styles.page}>
         <header className={styles.header}>
           <div className={styles.logo}>O</div>
@@ -44,6 +43,8 @@ export default function ClaimPage() {
         </section>
       </main>
 
+
+      { /*
       <header className="nav">
         <div className="nav-in">
           <div className="badge-x">O</div>
@@ -59,6 +60,8 @@ export default function ClaimPage() {
         </section>
         <ClaimBox />
       </div>
-    </div>
+
+     */}
+    </>
   );
 }
