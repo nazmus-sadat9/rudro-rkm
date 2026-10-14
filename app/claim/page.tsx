@@ -18,12 +18,10 @@ export default function ClaimPage() {
           <div className={styles.logo}>X</div>
           <div>
             <p className={styles.headerTitle}>CLAIM PORTAL</p>
-            <p className={styles.headerSub}>All slots complete</p>
           </div>
         </header>
 
         <section className={styles.content}>
-          <span className={styles.pill}>ALL SLOTS COMPLETE</span>
 
           <h1 className={styles.title}>
             <span>COMING</span>
@@ -31,10 +29,10 @@ export default function ClaimPage() {
           </h1>
 
           <div className={styles.card}>
-            <p className={styles.kicker}>RESERVATIONS CLOSED</p>
+            <p className={styles.kicker}>RESERVATION OPEN TILL</p>
             <h2 className={styles.cardTitle}>EVERY SLOT IS TAKEN</h2>
             <p className={styles.cardText}>
-              All reservation slots have been filled. The next phase opens soon.
+              The next phase opens when all reservation slots are filled.
             </p>
             <Link href="/" className={styles.button}>
               BACK TO HOME →
