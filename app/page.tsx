@@ -335,7 +335,7 @@ export default function Home() {
             <h2>How many NFTs?</h2>
             <p className="sub">1 wallet = 1 reservation • max {SITE.maxPerWallet}. {left} left.</p>
             <label className="lbl" htmlFor="w">Wallet (to receive your Oblyx NFT)</label>
-            <input id="w" placeholder="0x… or Solana address" value={wallet}
+            <input id="w" placeholder="0x… EVM address" value={wallet}
               onChange={(e) => { setWallet(e.target.value); setFormErr(""); }}
               autoCapitalize="off" autoCorrect="off" spellCheck={false} />
             {wallet && !validWallet(wallet) && <p className="err">Invalid wallet address.</p>}
