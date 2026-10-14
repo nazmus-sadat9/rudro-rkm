@@ -17,7 +17,7 @@
   background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1.5px, transparent 1.5px);
   background-size: 30px 30px;
   color: var(--ink);
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .header {

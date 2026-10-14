@@ -15,10 +15,10 @@ export default function ClaimPage() {
     <>
       <main className={styles.page}>
         <header className={styles.header}>
-          <div className={styles.logo}>O</div>
+          <div className={styles.logo}>X</div>
           <div>
             <p className={styles.headerTitle}>CLAIM PORTAL</p>
-            <p className={styles.headerSub}>Hidden • all slots complete</p>
+            <p className={styles.headerSub}>All slots complete</p>
           </div>
         </header>
 

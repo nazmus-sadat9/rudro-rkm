@@ -7,9 +7,9 @@ export const SITE = {
   // The DB is now the source of truth — keep 0 unless migrating.
   alreadyReserved: 0,
   maxPerWallet: 4,
-  xAccount: "rudro_rkm",
-  xAccountUrl: "https://x.com/rudro_rkm",
-  xPostUrl: "https://x.com/rudro_rkm/status/",
+  xAccount: "OBLYX_NFT",
+  xAccountUrl: "https://x.com/OBLYX_NFT",
+  xPostUrl: "https://x.com/OBLYX_NFT",
 } as const;
 
 export type Reservation = {
