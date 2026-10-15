@@ -12,12 +12,14 @@ export const SITE = {
   xPostUrl: "https://x.com/OBLYX_NFT",
 } as const;
 
+export type ReservationStatus = "pending" | "accepted" | "rejected";
+
 export type Reservation = {
   handle: string;
   wallet: string;
   qty: number;
-  code: string;
   at: number;
   handleVerified: boolean;
+  status: ReservationStatus;
   proofs?: { repostUrl?: string; commentUrl?: string };
 };

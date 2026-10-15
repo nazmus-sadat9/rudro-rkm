@@ -1,4 +1,4 @@
-import type { Reservation } from "./config";
+import type { Reservation, ReservationStatus } from "./config";
 import { SITE } from "./config";
 
 const KEY = "xpromo_reservations_v1";
@@ -14,7 +14,9 @@ export function loadReservations(): Reservation[] {
 
 export function saveReservation(r: Reservation) {
   const all = loadReservations();
-  all.push(r);
+  const i = all.findIndex((x) => x.wallet === r.wallet);
+  if (i >= 0) all[i] = r;
+  else all.push(r);
   localStorage.setItem(KEY, JSON.stringify(all));
 }
 
@@ -40,10 +42,6 @@ export function validWallet(w: string): boolean {
   return evm || sol;
 }
 
-export function makeCode(): string {
-  return "XC-" + Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
 export interface MintStats {
   count: number;
   pieces: number;
@@ -58,31 +56,36 @@ export async function getMintStats(): Promise<MintStats> {
 }
 
 export async function createMintReservation(input: {
-  code: string;
   handle: string;
   wallet: string;
   qty: number;
   tasks: { follow: boolean; like: boolean; rt: boolean; cmt: boolean };
   handleVerified: boolean;
   createdAt: number;
-}): Promise<{ code: string }> {
+}): Promise<{ wallet: string }> {
   const res = await fetch("/api/mints", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
-  if (!res.ok) throw new Error(data.error ?? "Could not save reservation");
-  return { code: data.code ?? input.code };
+  const raw = await res.text().catch(() => "");
+  let data: { error?: string; wallet?: string } = {};
+  try {
+    data = (JSON.parse(raw) as { error?: string; wallet?: string }) ?? {};
+  } catch {
+    /* non-JSON response (server crash page, proxy error, …) */
+  }
+  if (!res.ok) throw new Error(data.error ?? `Could not save reservation (HTTP ${res.status})`);
+  return { wallet: data.wallet ?? input.wallet };
 }
 
 export interface MintRow {
-  code: string;
   handle: string;
   handleLower: string;
   wallet: string;
   qty: number;
   handleVerified: boolean;
+  status: ReservationStatus;
   createdAt: number;
 }
 
@@ -97,16 +100,31 @@ export async function listMintsAdmin(code: string): Promise<MintRow[]> {
   return (await res.json()) as MintRow[];
 }
 
-export async function removeMintAdmin(code: string, adminCode: string): Promise<void> {
-  const res = await fetch(`/api/mints?code=${encodeURIComponent(code)}`, {
+export async function removeMintAdmin(wallet: string, adminCode: string): Promise<void> {
+  const res = await fetch(`/api/mints?wallet=${encodeURIComponent(wallet)}`, {
     method: "DELETE",
     headers: adminHeaders(adminCode),
   });
   if (!res.ok) throw new Error("Could not delete reservation");
 }
 
-export async function getMintByCode(code: string): Promise<Reservation | null> {
-  const res = await fetch(`/api/mints?code=${encodeURIComponent(code.trim().toUpperCase())}`, {
+export async function setMintStatusAdmin(
+  wallet: string,
+  status: ReservationStatus,
+  adminCode: string
+): Promise<MintRow> {
+  const res = await fetch("/api/mints", {
+    method: "PATCH",
+    headers: adminHeaders(adminCode),
+    body: JSON.stringify({ wallet, status }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string } & Partial<MintRow>;
+  if (!res.ok) throw new Error(data.error ?? "Could not update status");
+  return data as MintRow;
+}
+
+export async function getMintByWallet(wallet: string): Promise<Reservation | null> {
+  const res = await fetch(`/api/mints?wallet=${encodeURIComponent(wallet.trim())}`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Lookup unavailable");
@@ -114,7 +132,7 @@ export async function getMintByCode(code: string): Promise<Reservation | null> {
     handle: string;
     wallet: string;
     qty: number;
-    code: string;
+    status?: ReservationStatus;
   }>;
   const f = list[0];
   if (!f) return null;
@@ -122,8 +140,8 @@ export async function getMintByCode(code: string): Promise<Reservation | null> {
     handle: f.handle.replace(/^@/, "").toLowerCase(),
     wallet: f.wallet,
     qty: f.qty,
-    code: f.code,
     at: Date.now(),
     handleVerified: false,
+    status: f.status ?? "pending",
   };
 }

@@ -5,13 +5,11 @@ import { SITE, type Reservation } from "../lib/config";
 import {
   createMintReservation,
   getMintStats,
-  loadReservations,
   saveReservation,
   totalReserved,
   normHandle,
   validHandle,
   validWallet,
-  makeCode,
   type MintStats,
 } from "../lib/store";
 
@@ -26,13 +24,11 @@ export default function Home() {
   const [qty, setQty] = useState(1);
   const [done, setDone] = useState<Record<TaskKey, boolean>>({ follow: false, like: false, rt: false, cmt: false });
   const [pending, setPending] = useState<Record<TaskKey, boolean>>({ follow: false, like: false, rt: false, cmt: false });
-  const [code, setCode] = useState("");
   const [booked, setBooked] = useState<Reservation | null>(null);
   const [tick, setTick] = useState(0);
   const [mounted, setMounted] = useState(false); // gate localStorage reads until after hydration
   const [formErr, setFormErr] = useState("");
   const [checkingHandle, setCheckingHandle] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<MintStats | null>(null);
   const [dbDown, setDbDown] = useState(false);
@@ -159,12 +155,10 @@ export default function Home() {
     // reserve (server-enforced: uniques + 1000 cap)
     const h = normHandle(handle);
     const w = wallet.trim();
-    const c = makeCode();
     setSubmitting(true);
     setFormErr("");
     try {
       await createMintReservation({
-        code: c,
         handle: h,
         wallet: w,
         qty,
@@ -179,16 +173,15 @@ export default function Home() {
     }
     setSubmitting(false);
     const r: Reservation = {
-      handle: h, wallet: w, qty, code: c, at: Date.now(),
+      handle: h, wallet: w, qty, at: Date.now(),
       handleVerified: handleVerdict?.api === true,
+      status: "pending",
     };
     try {
       saveReservation(r); // on-device mirror so claim lookup works offline
     } catch {
       /* ignore */
     }
-    saveReservation(r);
-    setCode(c);
     setBooked(r);
     setFormErr("");
     setStep(4);
@@ -353,29 +346,14 @@ export default function Home() {
 
         {step === 4 && booked && (
           <section className="card tint-gold" style={{ textAlign: "center" }}>
-            <div className="sec-label mono">RESERVED</div>
+            <div className="sec-label mono">RESERVED • PENDING REVIEW</div>
             <h2>NFT reserved!</h2>
-            <p className="sub">Screenshot this. Claim opens later — keep code secret.</p>
-            <div className="codebox">{code}</div>
+            <p className="sub">Screenshot this. Claim opens later — just connect with this wallet.</p>
             <div style={{ textAlign: "left" }}>
               <div className="kv"><span>X handle</span><b>@{booked.handle} {booked.handleVerified ? "✓" : ""}</b></div>
               <div className="kv"><span>Wallet</span><b style={{ fontSize: 11, wordBreak: "break-all" }}>{booked.wallet}</b></div>
               <div className="kv"><span>NFTs</span><b>{booked.qty} / {SITE.maxPerWallet}</b></div>
             </div>
-            <button
-              className={`btn btn-ghost${copied ? " is-copied" : ""}`}
-              onClick={async () => {
-                try {
-                  await navigator.clipboard?.writeText(code);
-                } catch {
-                  /* ignore — user can select manually */
-                }
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 2000);
-              }}
-            >
-              {copied ? "Copied ✓" : "Copy code"}
-            </button>
           </section>
         )}
 

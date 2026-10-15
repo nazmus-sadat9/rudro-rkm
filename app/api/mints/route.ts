@@ -28,9 +28,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const sp = req.nextUrl.searchParams;
 
-    // Public stats for the progress bars.
+    // Public stats for the progress bars (rejected reservations free their slot).
     if (sp.get("stats") === "1") {
       const agg = await MintReservationModel.aggregate([
+        { $match: { status: { $ne: "rejected" } } },
         { $group: { _id: null, pieces: { $sum: "$qty" }, count: { $sum: 1 } } },
       ]);
       const pieces: number = agg[0]?.pieces ?? 0;
@@ -48,10 +49,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(all);
     }
 
-    // Public: look up your own reservation by its unguessable code (claim page).
-    const code = sp.get("code");
-    if (code !== null && code !== "") {
-      const found = await MintReservationModel.findOne({ code: code.trim().toUpperCase() })
+    // Public: look up your own reservation by wallet (claim page).
+    const wallet = sp.get("wallet");
+    if (wallet !== null && wallet !== "") {
+      const found = await MintReservationModel.findOne({ wallet: wallet.trim() })
         .select("-_id -__v")
         .lean();
       return NextResponse.json(found !== null ? [found] : []);
@@ -74,10 +75,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid reservation" }, { status: 400 });
 
   const b = body as Record<string, unknown>;
-  const { code, handle, wallet, qty, tasks, handleVerified, createdAt } = b;
+  const { handle, wallet, qty, tasks, handleVerified, createdAt } = b;
 
-  if (typeof code !== "string" || !/^XC-[A-Z0-9]{6}$/.test(code.trim().toUpperCase()))
-    return NextResponse.json({ error: "Missing reservation code" }, { status: 400 });
   if (typeof handle !== "string" || !XHANDLE_RE.test(handle.trim()))
     return NextResponse.json(
       { error: "Enter a valid X handle (1-15 chars, letters/numbers/_)." },
@@ -112,8 +111,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
 
+    // Rejected reservations don't block — their slot was freed.
     const dup = await MintReservationModel.findOne({
       $or: [{ wallet: cleanWallet }, { handleLower }],
+      status: { $ne: "rejected" },
     })
       .select("wallet handleLower")
       .lean();
@@ -130,28 +131,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const agg = await MintReservationModel.aggregate([
+      { $match: { status: { $ne: "rejected" } } },
       { $group: { _id: null, pieces: { $sum: "$qty" } } },
     ]);
     const used: number = (agg[0]?.pieces ?? 0) + SITE.alreadyReserved;
     if (used >= SITE.totalSlots || used + (qty as number) > SITE.totalSlots)
       return NextResponse.json({ error: "Sold out — all 1,000 NFTs are taken." }, { status: 410 });
 
+    // Re-reserving after a rejection refreshes the row back to pending.
     await MintReservationModel.findOneAndUpdate(
-      { code: (code as string).trim().toUpperCase() },
+      { wallet: cleanWallet },
       {
-        $setOnInsert: {
-          code: (code as string).trim().toUpperCase(),
+        $set: {
           handleLower,
           handle: `@${handleLower}`,
-          wallet: cleanWallet,
           qty,
           handleVerified: handleVerified === true,
+          status: "pending",
           createdAt,
         },
+        $setOnInsert: { wallet: cleanWallet },
       },
       { upsert: true }
     );
-    return NextResponse.json({ ok: true, code: (code as string).trim().toUpperCase() });
+    return NextResponse.json({ ok: true, wallet: cleanWallet, status: "pending" });
   } catch (err: unknown) {
     if (typeof err === "object" && err !== null && (err as { code?: number }).code === 11000)
       return NextResponse.json(
@@ -162,14 +165,46 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 }
 
+export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  if (typeof body !== "object" || body === null)
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  const { wallet, status } = body as Record<string, unknown>;
+  if (typeof wallet !== "string" || wallet.trim() === "")
+    return NextResponse.json({ error: "Missing wallet" }, { status: 400 });
+  if (status !== "pending" && status !== "accepted" && status !== "rejected")
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  try {
+    await connectDB();
+    const updated = await MintReservationModel.findOneAndUpdate(
+      { wallet: wallet.trim() },
+      { $set: { status } },
+      { new: true }
+    )
+      .select("-_id -__v")
+      .lean();
+    if (updated === null)
+      return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+    return NextResponse.json(updated);
+  } catch {
+    return dbError();
+  }
+}
+
 export async function DELETE(req: NextRequest): Promise<NextResponse> {
   if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     await connectDB();
-    const code = req.nextUrl.searchParams.get("code");
-    if (code === null || code === "")
-      return NextResponse.json({ error: "Missing code" }, { status: 400 });
-    await MintReservationModel.deleteOne({ code: code.trim().toUpperCase() });
+    const wallet = req.nextUrl.searchParams.get("wallet");
+    if (wallet === null || wallet === "")
+      return NextResponse.json({ error: "Missing wallet" }, { status: 400 });
+    await MintReservationModel.deleteOne({ wallet: wallet.trim() });
     return NextResponse.json({ ok: true });
   } catch {
     return dbError();

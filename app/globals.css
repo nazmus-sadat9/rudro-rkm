@@ -176,13 +176,6 @@ input::placeholder { color: #4d576c; }
   display: flex; gap: 10px;
 }
 
-.codebox {
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 26px; font-weight: 900; letter-spacing: 3px; text-align: center;
-  border: 3px dashed var(--brand-deep); border-radius: 16px; padding: 15px; margin: 14px 0;
-  background: var(--deep); user-select: all; transform: rotate(-1deg); color: var(--brand-ink);
-}
-
 .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; font-weight: 600; padding: 10px 0; border-bottom: 2px dashed #2c3a52; }
 .kv span { color: var(--mut); }
 .kv:last-child { border-bottom: 0; }
